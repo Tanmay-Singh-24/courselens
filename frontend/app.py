@@ -166,7 +166,11 @@ with st.sidebar:
                 st.session_state.ingested.append(up.name)
                 st.success(f"Added {up.name} ({n} chunks)")
             except Exception as e:
-                st.error(f"Failed on {up.name}: {e}")
+                if "rate_limit" in str(e).lower() or "429" in str(e):
+                    st.warning(f"⚠️ {up.name}: Groq's free daily token limit is "
+                               "reached — try again after it resets.")
+                else:
+                    st.error(f"Failed on {up.name}: {e}")
             finally:
                 os.unlink(tmp_path)
 
@@ -231,18 +235,28 @@ if question := st.chat_input("Ask about your course…"):
             st.markdown(answer)
         else:
             from backend.graph import get_response
-            with st.spinner("Searching your course…"):
-                result = get_response(question, thread_id=st.session_state.thread_id)
-            answer, sources, verdicts = result["answer"], result["sources"], result["verdicts"]
-            stats = {"latency_s": result["latency_s"],
-                     "total_tokens": result["total_tokens"],
-                     "attempts": result["attempts"]}
-            st.markdown(answer)
-            render_sources(sources)
-            render_verdicts(verdicts)
-            render_stats(stats)
-            telemetry.log_query(question, result["latency_s"], result["total_tokens"],
-                                result["attempts"], len(sources))
+            try:
+                with st.spinner("Searching your course…"):
+                    result = get_response(question, thread_id=st.session_state.thread_id)
+                answer, sources, verdicts = result["answer"], result["sources"], result["verdicts"]
+                stats = {"latency_s": result["latency_s"],
+                         "total_tokens": result["total_tokens"],
+                         "attempts": result["attempts"]}
+                st.markdown(answer)
+                render_sources(sources)
+                render_verdicts(verdicts)
+                render_stats(stats)
+                telemetry.log_query(question, result["latency_s"], result["total_tokens"],
+                                    result["attempts"], len(sources))
+            except Exception as e:
+                if "rate_limit" in str(e).lower() or "429" in str(e):
+                    answer = ("⚠️ Groq's free-tier daily token limit has been reached — "
+                              "please try again later. (This live demo runs on a single "
+                              "free API key.)")
+                else:
+                    answer = f"⚠️ Something went wrong answering that: {str(e)[:200]}"
+                sources, verdicts, stats = [], [], None
+                st.warning(answer)
 
     st.session_state.messages.append(
         {"role": "assistant", "content": answer, "sources": sources,
