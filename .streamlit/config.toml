@@ -1,0 +1,7 @@
+# A deployed app doesn't need hot-reload file watching (Streamlit Cloud restarts
+# on each git push anyway). Disabling it stops Streamlit from walking optional
+# `transformers` submodules for changes — which produced harmless but noisy
+# "Examining the path of … raised ModuleNotFoundError: torchvision" log spam
+# (torchvision is pulled in lazily by an unused transformers model; we don't need it).
+[server]
+fileWatcherType = "none"
