@@ -1,0 +1,29 @@
+# CourseLens dependencies
+
+# LLM orchestration (shared with PaperMind — pinned to tested versions)
+langchain==1.3.2
+langchain-core==1.4.0
+langchain-community==0.4.2
+langchain-text-splitters==1.1.2
+langgraph==1.2.2
+
+# Model + embeddings + vector store integrations
+langchain-groq==1.1.2
+langchain-huggingface==1.2.2
+langchain-chroma==1.1.0
+chromadb==1.5.9
+sentence-transformers==5.5.1
+
+# Audio transcription + media handling (pinned to installed + tested versions)
+groq==0.37.1              # raw SDK for Whisper transcription (verbose_json timestamps)
+yt-dlp==2026.6.9          # YouTube audio extraction (local-only bonus)
+imageio-ffmpeg==0.6.0     # bundled ffmpeg binary — no system install required
+
+# PDF text + figure extraction (V2)
+pymupdf==1.28.0           # fitz: per-page text + embedded raster image extraction
+# Pillow arrives transitively (sentence-transformers); used to downscale figures.
+
+# UI + config
+streamlit==1.58.0
+streamlit-agraph==0.0.45   # V6 Course Map concept graph
+python-dotenv==1.2.2

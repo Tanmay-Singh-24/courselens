@@ -1,0 +1,16 @@
+# CourseLens — YouTube test links
+# Paste any of these into the "…or a YouTube lecture URL" box in the sidebar to
+# exercise the YouTube ingestion path (yt-dlp downloads audio → Whisper).
+
+# --- Tiny / fast (19s, known content — same clip as audio/me_at_the_zoo.mp3) ---
+# Expected: speaker is in front of ELEPHANTS; the "cool thing" is their long trunks.
+https://www.youtube.com/watch?v=jNQXAC9IVRw
+
+# --- Realistic longer lecture (~19 min — exercises the audio-splitting path) ---
+# 3Blue1Brown, "But what is a neural network?" — expect content on neurons,
+# layers, weights, biases, and how a network recognizes handwritten digits.
+https://www.youtube.com/watch?v=aircAruvnKk
+
+# Note: any lecture URL works. Longer videos cost more Whisper time and get split
+# into 10-minute windows automatically. YouTube ingestion is local-only (yt-dlp
+# is blocked on Streamlit Cloud).
