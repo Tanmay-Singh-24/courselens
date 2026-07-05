@@ -65,17 +65,20 @@ def render_sources(sources):
     with st.expander("Sources"):
         for s in sources:
             stype = s.get("source_type")
-            if stype == "audio" and s.get("audio_path"):
+            # Media paths live on ephemeral disk and can outlive a restart in the
+            # stored metadata — always check the file still exists before rendering.
+            if stype == "audio" and s.get("audio_path") and os.path.exists(s["audio_path"]):
                 st.markdown(f"**▶ {s['label']}**")
                 st.audio(s["audio_path"], start_time=int(s.get("ts_start") or 0))
             elif stype == "youtube" and s.get("youtube_url"):
                 t = int(s.get("ts_start") or 0)
                 st.markdown(f"- [{s['label']}]({s['youtube_url']}&t={t}s)")
-            elif stype == "pdf_figure" and s.get("figure_image_path"):
+            elif stype == "pdf_figure" and s.get("figure_image_path") \
+                    and os.path.exists(s["figure_image_path"]):
                 st.markdown(f"**🖼 {s['label']}**")
                 st.image(s["figure_image_path"])
             else:
-                st.markdown(f"- {s['label']}")
+                st.markdown(f"- {s['label']} *(media unavailable — re-ingest to restore playback)*")
 
 
 def render_verdicts(verdicts):

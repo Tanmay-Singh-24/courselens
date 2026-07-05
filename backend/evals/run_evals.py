@@ -148,7 +148,7 @@ def _markdown(summaries):
     row("Answer keyword match", "keyword")
     row("Groundedness (LLM-judge)", "grounded")
     row("Refusal accuracy (off-corpus)", "refusal_acc")
-    lines.append(f"| Corpus questions (n) | " +
+    lines.append("| Corpus questions (n) | " +
                  " | ".join(str(s["n"]) for s in summaries.values()) + " |")
 
     # Per-modality (use the first mode's breakdown for the modality list).
@@ -265,8 +265,9 @@ def run(grader_on, cache, use_cache=True):
 
 def _ingest_test_corpus():
     """Convenience: ingest test_dataset audio + slides so the harness has data."""
+    from backend.config import PROJECT_DIR
     from backend.ingest.dispatch import ingest_file
-    root = os.path.join(G.__file__.rsplit("backend", 1)[0], "test_dataset")
+    root = os.path.join(PROJECT_DIR, "test_dataset")
     files = [os.path.join(root, "audio", "lecture_graph_algorithms.mp3"),
              os.path.join(root, "audio", "me_at_the_zoo.mp3"),
              os.path.join(root, "audio", "lecture_data_structures.mp3"),

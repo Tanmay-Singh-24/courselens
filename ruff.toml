@@ -1,0 +1,10 @@
+line-length = 100
+
+[lint]
+select = ["E", "F", "W"]
+# Long prompt strings / docs lines are fine; readability > hard wrapping.
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+# The frontend must resolve secrets before importing the backend (import-time client).
+"frontend/app.py" = ["E402"]

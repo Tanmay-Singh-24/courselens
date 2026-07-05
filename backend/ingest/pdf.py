@@ -12,6 +12,7 @@ NOT extracted — PyMuPDF only yields raster images (a documented limitation).
 import os
 import io
 import re
+import time
 import base64
 import hashlib
 
@@ -96,23 +97,35 @@ def _save_png(pix):
     return path, base64.b64encode(png).decode()
 
 
-def _caption_image(b64):
-    """Ask the Groq vision model for a retrieval-useful caption."""
-    resp = _client().chat.completions.create(
-        model=VISION_MODEL,
-        temperature=0,
-        messages=[{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": CAPTION_PROMPT},
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
-            ],
-        }],
-    )
-    content = resp.choices[0].message.content
-    # qwen3.6 is a reasoning model — strip its <think>…</think> block so the caption
-    # embedding reflects the figure's content, not the model's meta-reasoning.
-    return re.sub(r"<think>.*?</think>", "", content, flags=re.S).strip()
+def _strip_think(text):
+    """Remove a reasoning model's <think>…</think> block so the caption embedding
+    reflects the figure's content, not the model's meta-reasoning."""
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+
+
+def _caption_image(b64, retries=3):
+    """Ask the Groq vision model for a retrieval-useful caption. Retries with
+    backoff on rate limits so one 429 mid-deck doesn't lose the whole ingestion."""
+    import groq
+    for attempt in range(retries):
+        try:
+            resp = _client().chat.completions.create(
+                model=VISION_MODEL,
+                temperature=0,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": CAPTION_PROMPT},
+                        {"type": "image_url",
+                         "image_url": {"url": f"data:image/png;base64,{b64}"}},
+                    ],
+                }],
+            )
+            return _strip_think(resp.choices[0].message.content)
+        except groq.RateLimitError:
+            if attempt == retries - 1:
+                raise
+            time.sleep(2 ** (attempt + 1))   # 2s, 4s
 
 
 def _extract_figure_chunks(doc, source_name):

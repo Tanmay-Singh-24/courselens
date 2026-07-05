@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Tests are fully offline — the dummy key only satisfies client construction.
+      GROQ_API_KEY: dummy_ci_key
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cache the sentence-transformers model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-all-MiniLM-L6-v2
+
+      - name: Install dependencies
+        run: |
+          pip install --quiet -r requirements.txt pytest ruff
+
+      - name: Lint (ruff)
+        run: ruff check backend frontend tests
+
+      - name: Compile check
+        run: python -m py_compile backend/*.py backend/ingest/*.py backend/evals/run_evals.py frontend/app.py
+
+      - name: Tests (offline — no API calls)
+        run: pytest -q

@@ -1,5 +1,7 @@
 # 🎓 CourseLens
 
+![CI](https://github.com/Tanmay-Singh-24/courselens/actions/workflows/ci.yml/badge.svg)
+
 **Chat with your whole course.** Ingest lecture recordings, slide PDFs, and their
 figures into one searchable knowledge base, then ask questions and get grounded
 answers where **every citation is actionable** — click a source and the audio
@@ -133,6 +135,21 @@ On the initial 14-question set, retrieval hit-rate@5 and groundedness were both
 **100%**. Regenerate on the full expanded corpus with
 `python -m backend.evals.run_evals --ingest` — treat the numbers as directional.
 
+## Tests & CI
+
+The deterministic core — transcript chunking, grader parsing/routing, citation
+filtering, eval scoring, concept-graph assembly, and the PDF figure pipeline
+(vision stubbed) — is covered by an **offline pytest suite** (36 tests, no API
+calls, runs in seconds):
+
+```bash
+pytest -q
+```
+
+Every push runs **lint (ruff) → compile → tests** via GitHub Actions
+([`ci.yml`](.github/workflows/ci.yml)); a [`Jenkinsfile`](Jenkinsfile) defines the
+same gate for a Jenkins server.
+
 ## Instrumentation
 
 Every query displays its **latency, total token usage, and retrieval-attempt count**
@@ -171,9 +188,9 @@ ffmpeg is bundled through `imageio-ffmpeg`, so no `packages.txt` is needed. The
 
 ### Planned / future work
 
-- **CI/CD** — a `pytest` suite covering the offline logic (grader routing, retrieval-hit
-  scoring, transcript chunking, concept-graph assembly), run on every push via **GitHub
-  Actions** and a **Jenkins** pipeline; a **Dockerfile** for containerized deploys.
+- **Containerized CD** — a **Dockerfile** and an image-publish stage in the Jenkins
+  pipeline for deploys beyond Streamlit Cloud. *(CI — pytest + GitHub Actions +
+  Jenkinsfile — is done; see Tests & CI.)*
 - **Per-session library isolation** — today all uploads share one Chroma collection;
   scope collections by session id so users don't see each other's material.
 - **Persistent storage** — Streamlit Cloud's disk is ephemeral; back the vector store

@@ -8,6 +8,33 @@ Newest version on top.
 
 ---
 
+## V6.1 — Code review, hardening & CI  ·  2026-07-04  ·  ✅
+
+Full-codebase review pass; every finding fixed the same day.
+
+### Findings & fixes
+| Severity | Finding | Fix |
+|---|---|---|
+| **High** | `render_sources` called `st.audio`/`st.image` on media paths stored in Chroma metadata without checking the file exists — on Streamlit Cloud, `media_store/` can be wiped (restart) while metadata survives, crashing the whole chat render. | Guard with `os.path.exists`; show *"media unavailable — re-ingest to restore playback"* instead. |
+| **Medium** | One 429 while captioning figure #3 of a big deck threw away the entire PDF ingestion (text chunks included). | `_caption_image` now retries with exponential backoff (2s/4s) before giving up. |
+| **Medium** | No test suite — all validations lived as ad-hoc session scripts. | **`tests/` pytest suite: 36 offline tests** (chunking, grader parse/route, citation filter, labels, eval scoring, aggregation, concept map, PDF pipeline with vision stubbed, config/store utils). Runs in ~12s, zero API calls. |
+| **Low** | `run_evals._ingest_test_corpus` derived the repo root via `G.__file__.rsplit("backend", 1)` — fragile. | Use `config.PROJECT_DIR`. |
+| **Low** | Think-strip regex was inline (untestable); 1 ruff `F541` lint. | Extracted `_strip_think()`; ruff auto-fix; repo now lints clean under `ruff.toml` (E/F/W). |
+| **Noted** | YouTube dedup keys on the raw URL — `youtu.be/x` vs `watch?v=x` would double-ingest. | Documented; canonicalizing needs a metadata fetch pre-download — deferred. |
+
+### CI added
+- **GitHub Actions** (`.github/workflows/ci.yml`): lint → compile → pytest on every
+  push/PR; pip + HuggingFace-model caching; dummy `GROQ_API_KEY` (tests are offline).
+- **`Jenkinsfile`** with the same stages for a Jenkins server.
+- README: CI badge + "Tests & CI" section; future-work updated (CI done → Docker CD next).
+
+### Test-writing note
+One initially-failing test was a wrong *expectation* (60-char segments with a
+100-char budget correctly yield one chunk per segment, not two) — the code was right;
+the test was fixed and a second case added for the merge-then-split path.
+
+---
+
 ## V6 — Course Map (concept graph)  ·  2026-07-04  ·  ✅ built & logic-validated
 
 **Goal:** an interactive concept graph over the ingested library — the Obsidian-style
