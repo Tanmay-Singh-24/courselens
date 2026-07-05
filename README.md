@@ -168,3 +168,19 @@ ffmpeg is bundled through `imageio-ffmpeg`, so no `packages.txt` is needed. The
 | **V4** ✅ | Eval harness — hit-rate, groundedness, grader ablation |
 | **V5** ✅ | Per-query instrumentation (latency + tokens) + deploy-ready |
 | **V6** ✅ | Course Map — interactive concept graph over the library |
+
+### Planned / future work
+
+- **CI/CD** — a `pytest` suite covering the offline logic (grader routing, retrieval-hit
+  scoring, transcript chunking, concept-graph assembly), run on every push via **GitHub
+  Actions** and a **Jenkins** pipeline; a **Dockerfile** for containerized deploys.
+- **Per-session library isolation** — today all uploads share one Chroma collection;
+  scope collections by session id so users don't see each other's material.
+- **Persistent storage** — Streamlit Cloud's disk is ephemeral; back the vector store
+  with a hosted store (Chroma Cloud / Qdrant) so libraries survive restarts.
+- **Streaming answers** — token-by-token generation for snappier responses.
+- **Video ingestion** — sample on-screen slide frames, not just the audio track.
+- **Larger eval set + CI eval gate** — expand the gold set and fail the build if
+  retrieval hit-rate or groundedness drops below a threshold.
+- **Demo hardening** — request caching + a visible "free-tier daily limit" notice so a
+  shared-key public demo degrades gracefully under load.
