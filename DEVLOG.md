@@ -8,6 +8,43 @@ Newest version on top.
 
 ---
 
+## V6.2 — Production debugging: real-data testing & honest numbers  ·  2026-07-06  ·  ✅
+
+Debugging pass driven by real-world data (a 15-minute real YouTube lecture + an
+arXiv paper PDF) and a full fresh eval run. Headline: **the README's
+"0% → 100% refusal accuracy" ablation claim was a metric artifact and has been
+corrected** — see below.
+
+### Findings & fixes
+| Severity | Finding | Fix |
+|---|---|---|
+| **High (faulty number)** | Refusal detection counted only the grader's exact template string, so the grader-**off** baseline — which declines off-corpus questions in its own words ("the provided context does not mention…") — scored 0% by construction. Honest detection: **both modes refuse 100%** of off-corpus questions, even topically-adjacent ones. | Broadened `_is_refusal` to recognized decline phrasings (unit-tested against real model outputs); README rewritten to describe the grader's value as structural (deterministic refusal, bounded retry, library listing), not a fabricated 100-point jump. |
+| **High** | Chroma metadata stored **absolute** media paths from the ingest machine — after any move/redeploy every audio/figure citation showed "media unavailable" even with the files present. | Paths now stored relative to `media_store/`; `resolve_media_path()` re-roots legacy absolute paths at render time. |
+| **High** | 15-minute YouTube lecture failed with `groq.APITimeoutError` — the SDK's 60 s default can't cover a multi-MB upload + server-side transcription of long audio. The ≤90 s test corpus never exercised this. | Transcription client now uses `WHISPER_TIMEOUT_S=300`, `max_retries=3`. |
+| **Medium (faulty number)** | Groundedness judge saw only the first 2 000 chars of a ~6 000-char context — answers grounded in later chunks could be falsely judged ungrounded. | Judge now receives the full retrieved context (12 000-char safety cap). |
+| **Medium** | Off-corpus gold set had only blatant questions (capital of France) — easy mode for any instruction-tuned model. | Added 3 **topically-adjacent traps** (A* search, insertion sort, red-black trees): near the corpus, absent from it, parametrically known to the model. All still refused, both modes. |
+| **Low** | `pdf_text` citations hit the UI's else-branch: rendered as "*media unavailable — re-ingest*". | Slide-text sources render as a plain 📄 page citation. |
+| **Low** | Duplicate upload reported "Added (0 chunks)"; `ingest_file` couldn't distinguish duplicate from empty file. | Returns `None` for duplicates; UI says "already in your library". |
+| **Low** | Uploader rejected `.aac/.ogg/.opus` though the backend supports them; whole-file reads for hashing; `.env.example` referenced by README didn't exist. | Extensions added; chunked (1 MB) hashing; `.env.example` created. |
+
+### Verified with real data (not just the shipped corpus)
+- **Real YouTube video** (Steve Jobs' 2005 Stanford commencement, 15 min) ingested
+  through yt-dlp → ffmpeg → Whisper; question answering + timestamp deep-links
+  checked against the known speech content.
+- **Real PDF** ("Attention Is All You Need", arXiv 1706.03762) ingested alongside.
+- **Full fresh eval** (no cache, both grader modes, 23 corpus + 6 off-corpus):
+  hit-rate@5 / keyword / groundedness / refusal all **100% in both modes**.
+- Groq model IDs re-verified against the live API (2026-07-06).
+
+### Infra
+- **Dockerfile** + `.dockerignore` (roadmap item): slim image, deps layer-cached,
+  embedding model baked in, volumes for `chroma_store`/`media_store`, healthcheck.
+  (Not build-tested locally — no Docker on this machine.)
+- Test suite 36 → **40 offline tests**; ruff clean.
+- Rebuilt `venv` (the committed one symlinked a Python from another machine).
+
+---
+
 ## V6.1 — Code review, hardening & CI  ·  2026-07-04  ·  ✅
 
 Full-codebase review pass; every finding fixed the same day.

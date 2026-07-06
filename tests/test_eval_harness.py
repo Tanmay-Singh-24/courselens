@@ -52,6 +52,17 @@ def test_refusal_detection():
     assert not E._is_refusal("The answer is 42.")
 
 
+def test_refusal_detection_catches_generator_phrasings():
+    # The grader-off baseline declines in its own words — that must count as a
+    # refusal too, or the ablation compares against a strawman.
+    assert E._is_refusal("The provided context does not contain information about France.")
+    assert E._is_refusal("I cannot answer that based on the course materials.")
+    assert E._is_refusal("The capital of France is not mentioned in the context.")
+    # Real grader-off outputs observed in eval runs — must count as refusals:
+    assert E._is_refusal("The provided context does not mention the capital of France.")
+    assert E._is_refusal("Therefore, I cannot provide an answer to this question.")
+
+
 def test_groundedness_parse_is_conservative():
     assert E._parse_groundedness('{"grounded": true, "reason": "ok"}') is True
     assert E._parse_groundedness("garbage") is False   # unparseable → NOT grounded

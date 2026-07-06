@@ -86,8 +86,26 @@ def _keyword_hit(answer, keywords):
     return any(k.lower() in a for k in (keywords or []))
 
 
+# Phrases that signal a decline — the grader's refusal template plus the ways the
+# generator declines in its own words (its prompt says "say so honestly"). If only
+# the template counted, grader-off refusal accuracy would be 0% by construction
+# instead of by measurement.
+_REFUSAL_MARKERS = (
+    "couldn't find", "could not find",
+    "not in your materials", "not in the context", "not in the provided context",
+    "doesn't contain", "does not contain", "don't contain", "do not contain",
+    "cannot answer", "can't answer", "unable to answer", "unable to find",
+    "cannot provide", "can't provide", "unable to provide",
+    "no information", "not covered", "not cover", "not mention",
+    "not mentioned", "isn't mentioned", "is not mentioned",
+    "don't have information", "do not have information",
+)
+
+
 def _is_refusal(answer):
-    return "couldn't find anything in your materials" in answer.lower()
+    """Did the system decline to answer (in any recognizable phrasing)?"""
+    a = answer.lower()
+    return any(m in a for m in _REFUSAL_MARKERS)
 
 
 def _parse_groundedness(raw):
@@ -200,9 +218,13 @@ def _load_gold():
 
 
 def _judge_groundedness(answer, context):
+    # Give the judge the FULL retrieved context (top-5 chunks ≈ 6 KB — well within
+    # the model's window). Truncating it would flag answers as ungrounded merely
+    # because their supporting chunk fell past the cutoff. 12000 chars is a
+    # safety cap, not an expected truncation point.
     raw = G.llm.invoke([
         SystemMessage(content=JUDGE_PROMPT),
-        HumanMessage(content=f"CONTEXT:\n{context[:2000]}\n\nANSWER:\n{answer}"),
+        HumanMessage(content=f"CONTEXT:\n{context[:12000]}\n\nANSWER:\n{answer}"),
     ]).content
     return _parse_groundedness(raw)
 
@@ -277,7 +299,7 @@ def _ingest_test_corpus():
         if os.path.exists(f):
             print(f"ingesting {os.path.basename(f)} …")
             n = ingest_file(f, os.path.basename(f))
-            print(f"  {n} chunks")
+            print("  already ingested — skipped" if n is None else f"  {n} chunks")
 
 
 def main():

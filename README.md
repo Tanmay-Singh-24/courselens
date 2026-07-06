@@ -7,14 +7,13 @@ figures into one searchable knowledge base, then ask questions and get grounded
 answers where **every citation is actionable** — click a source and the audio
 jumps to the exact moment, or the referenced figure appears inline.
 
-CourseLens is a multimodal, *agentic* RAG study tool built with LangGraph. It's
-the successor to [PaperMind](../papermind) — same RAG backbone, expanded to cross
-modalities and to cite its sources by timestamp.
+CourseLens is a multimodal, *agentic* RAG study tool built with LangGraph — a
+RAG backbone expanded to cross modalities and to cite its sources by timestamp.
 
 **Highlights**
 - 🎧 **Multimodal ingest** — audio, YouTube, and slide PDFs (incl. figures) in one knowledge base
 - 🔗 **Actionable citations** — click to seek audio/video to the exact second, or view the cited figure inline
-- 🧠 **Corrective-RAG grader** — refuses to answer from irrelevant context (**0% → 100%** refusal accuracy vs. no grader)
+- 🧠 **Corrective-RAG grader** — grades retrieval relevance, retries with a reformulated query, and refuses deterministically instead of trusting the generator's judgment
 - 📊 **Measured, not vibes** — an eval harness with retrieval hit-rate, groundedness, and a grader ablation
 - 🗺️ **Course Map** — an interactive concept graph over your whole course
 - ⚙️ **Instrumented** — per-query latency + token usage
@@ -124,22 +123,32 @@ It reports, over a hand-labeled gold set ([`backend/evals/gold.jsonl`](backend/e
 - **Ablation** — the corrective-RAG grader **on vs off** on identical inputs
 
 Results are written to `backend/evals/results.md`. The gold set covers **23 corpus
-questions** (16 audio, 4 slide-text, 3 figure) plus **3 off-corpus** refusal checks.
+questions** (16 audio, 4 slide-text, 3 figure) plus **6 off-corpus** refusal checks —
+3 blatant ("capital of France?") and 3 **topically-adjacent traps** (A\* search,
+insertion sort, red-black trees: material the corpus is *near* but doesn't cover,
+where a model is tempted to answer from its own knowledge).
 
-**Ablation — what the corrective-RAG grader buys (the headline):** with the grader
-**off**, off-corpus questions ("capital of France?") get answered from irrelevant
-context — refusal accuracy **0%**. With it **on**, **100%**. That **0% → 100%** is the
-grader earning its place, and it's robust regardless of set size.
+**Current numbers** (full fresh run): retrieval hit-rate@5, keyword match,
+groundedness, and refusal accuracy are all **100% in both grader modes**. The
+corpus is small and clean — treat these as a regression floor, not a benchmark.
 
-On the initial 14-question set, retrieval hit-rate@5 and groundedness were both
-**100%**. Regenerate on the full expanded corpus with
-`python -m backend.evals.run_evals --ingest` — treat the numbers as directional.
+**Ablation — measured honestly:** an earlier version of this README claimed the
+grader took off-corpus refusal accuracy from **0% → 100%**. Auditing showed that
+number was an artifact of the metric: only the grader's exact refusal template
+counted as a refusal, so the grader-off baseline — which declined in its own
+words ("the provided context does not mention…") — was scored as hallucinating.
+With honest refusal detection, the temperature-0 generator already declines every
+off-corpus question, including the adjacent traps. What the grader actually buys
+is **structural, not statistical**: a *deterministic* refusal path that doesn't
+depend on the generator's judgment (or survive a model swap by luck), a bounded
+reformulate-and-retry loop that can rescue marginal retrievals, and a refusal
+message that tells the user what the library *does* cover.
 
 ## Tests & CI
 
 The deterministic core — transcript chunking, grader parsing/routing, citation
 filtering, eval scoring, concept-graph assembly, and the PDF figure pipeline
-(vision stubbed) — is covered by an **offline pytest suite** (36 tests, no API
+(vision stubbed) — is covered by an **offline pytest suite** (40 tests, no API
 calls, runs in seconds):
 
 ```bash
@@ -175,6 +184,22 @@ a demo; worth noting to reviewers).
 ffmpeg is bundled through `imageio-ffmpeg`, so no `packages.txt` is needed. The
 `test_dataset/` folder has a small lecture + slide deck to try immediately.
 
+## Deploy (Docker)
+
+For anywhere that runs containers:
+
+```bash
+docker build -t courselens .
+docker run -p 8501:8501 -e GROQ_API_KEY=gsk_your_key \
+  -v courselens-vectors:/app/chroma_store \
+  -v courselens-media:/app/media_store courselens
+```
+
+The embedding model is baked into the image (no slow first boot), the volumes
+persist your library across restarts, and a `HEALTHCHECK` watches Streamlit's
+health endpoint. YouTube ingestion is off by default in containers (datacenter
+IPs are blocked by YouTube); re-enable from a home IP with `-e ENABLE_YOUTUBE=1`.
+
 ## Roadmap
 
 | Version | Adds |
@@ -188,9 +213,6 @@ ffmpeg is bundled through `imageio-ffmpeg`, so no `packages.txt` is needed. The
 
 ### Planned / future work
 
-- **Containerized CD** — a **Dockerfile** and an image-publish stage in the Jenkins
-  pipeline for deploys beyond Streamlit Cloud. *(CI — pytest + GitHub Actions +
-  Jenkinsfile — is done; see Tests & CI.)*
 - **Per-session library isolation** — today all uploads share one Chroma collection;
   scope collections by session id so users don't see each other's material.
 - **Persistent storage** — Streamlit Cloud's disk is ephemeral; back the vector store

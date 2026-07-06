@@ -1,0 +1,28 @@
+# Secrets — never bake into an image
+.env
+.streamlit/secrets.toml
+
+# Local state (rebuilt on ingest / mounted as volumes)
+chroma_store/
+media_store/
+query_log.csv
+backend/evals/.cache.json
+
+# Dev / VCS clutter
+.git/
+.github/
+.devcontainer/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+# Not needed at runtime
+tests/
+test_dataset/
+docs/
+*.md
+Jenkinsfile
+LICENSE

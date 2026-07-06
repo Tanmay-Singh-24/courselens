@@ -26,6 +26,7 @@ from backend.config import (
     MAX_FIGURE_DIM,
     MIN_FIGURE_PX,
     VISION_MODEL,
+    media_relpath,
 )
 
 _splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_CHARS, chunk_overlap=CHUNK_OVERLAP)
@@ -152,7 +153,8 @@ def _extract_figure_chunks(doc, source_name):
                     "source_name": source_name,
                     "source_type": "pdf_figure",
                     "page": i + 1,
-                    "figure_image_path": path,
+                    # relative to media_store/ so the citation survives moves
+                    "figure_image_path": media_relpath(path),
                 },
             })
     return chunks

@@ -14,13 +14,17 @@ import shutil
 import hashlib
 import subprocess
 import tempfile
+import time
 
 from backend.config import (
     AUDIO_DIR,
     CHUNK_CHARS,
     SEGMENT_SECONDS,
     WHISPER_MAX_BYTES,
+    WHISPER_MAX_RETRIES,
     WHISPER_MODEL,
+    WHISPER_TIMEOUT_S,
+    media_relpath,
 )
 
 _groq_client = None
@@ -32,7 +36,9 @@ def _client():
     global _groq_client
     if _groq_client is None:
         from groq import Groq
-        _groq_client = Groq()   # reads GROQ_API_KEY from the environment
+        # Reads GROQ_API_KEY from the environment. Long timeout: transcription
+        # uploads are large and server processing scales with audio length.
+        _groq_client = Groq(timeout=WHISPER_TIMEOUT_S, max_retries=WHISPER_MAX_RETRIES)
     return _groq_client
 
 
@@ -63,11 +69,14 @@ def _to_flac(src, workdir):
     return out
 
 
-def _split_if_needed(flac, workdir):
-    """Return [(path, offset_seconds)]. Split into SEGMENT_SECONDS windows only
-    when the file exceeds the size cap; otherwise a single piece at offset 0."""
-    if os.path.getsize(flac) <= WHISPER_MAX_BYTES:
-        return [(flac, 0.0)]
+def _split(flac, workdir):
+    """Split into SEGMENT_SECONDS windows and return [(path, offset_seconds)].
+
+    Always segmenting (a short file just yields one segment) keeps every upload
+    small and fast, and isolates failures to one window instead of the whole
+    lecture — Groq's transcription endpoint was observed to 502 on a single
+    15-minute request that succeeds fine as 10-minute pieces. Segments also stay
+    far below WHISPER_MAX_BYTES (~10 min of 16 kHz mono FLAC ≈ 7 MB)."""
     pattern = os.path.join(workdir, "seg_%03d.flac")
     _run([
         _ffmpeg_exe(), "-y", "-i", flac,
@@ -75,6 +84,14 @@ def _split_if_needed(flac, workdir):
         "-ar", "16000", "-ac", "1", "-c:a", "flac", pattern,
     ])
     parts = sorted(glob.glob(os.path.join(workdir, "seg_*.flac")))
+    if not parts:
+        raise RuntimeError("ffmpeg produced no audio segments.")
+    oversize = [p for p in parts if os.path.getsize(p) > WHISPER_MAX_BYTES]
+    if oversize:
+        raise RuntimeError(
+            f"{len(oversize)} audio segment(s) exceed the {WHISPER_MAX_BYTES // 2**20} MB "
+            "upload cap — lower SEGMENT_SECONDS in backend/config.py."
+        )
     # Fixed-window splits → the i-th part starts at i * SEGMENT_SECONDS.
     return [(p, i * SEGMENT_SECONDS) for i, p in enumerate(parts)]
 
@@ -84,15 +101,30 @@ def _seg(obj, key):
     return obj[key] if isinstance(obj, dict) else getattr(obj, key)
 
 
-def _transcribe_segment(path, offset):
-    """Transcribe one file; return segments shifted to GLOBAL timestamps."""
+def _transcribe_segment(path, offset, retries=3):
+    """Transcribe one file; return segments shifted to GLOBAL timestamps.
+    The SDK retries transient failures per request already; this outer loop adds
+    longer-horizon retries with a pause (Groq's Whisper endpoint occasionally
+    returns 502 under load) so one blip doesn't lose the whole lecture."""
+    import groq
     with open(path, "rb") as f:
-        resp = _client().audio.transcriptions.create(
-            file=(os.path.basename(path), f.read()),
-            model=WHISPER_MODEL,
-            response_format="verbose_json",
-            timestamp_granularities=["segment"],
-        )
+        payload = f.read()
+    for attempt in range(retries):
+        try:
+            resp = _client().audio.transcriptions.create(
+                file=(os.path.basename(path), payload),
+                model=WHISPER_MODEL,
+                response_format="verbose_json",
+                timestamp_granularities=["segment"],
+            )
+            break
+        except (groq.InternalServerError, groq.APIConnectionError) as e:
+            if attempt == retries - 1:
+                raise
+            print(f"transcription retry {attempt + 1}/{retries - 1} after {type(e).__name__}")
+            # Groq 502s arrive in waves lasting minutes (observed on real
+            # lectures) — short pauses don't outlive them.
+            time.sleep(30 * (attempt + 1))   # 30s, 60s
     segments = getattr(resp, "segments", None) or []
     return [
         {
@@ -130,7 +162,7 @@ def transcribe_audio(audio_path):
     """Full audio file → timestamped transcript chunks (no metadata/storage)."""
     with tempfile.TemporaryDirectory() as workdir:
         flac = _to_flac(audio_path, workdir)
-        pieces = _split_if_needed(flac, workdir)
+        pieces = _split(flac, workdir)
         segments = []
         for path, offset in pieces:
             segments.extend(_transcribe_segment(path, offset))
@@ -139,15 +171,19 @@ def transcribe_audio(audio_path):
 
 def _persist_audio(src):
     """Copy uploaded audio into media_store (keyed by content hash) so st.audio
-    playback survives Streamlit reruns. Returns the stored path."""
+    playback survives Streamlit reruns. Returns the stored path relative to
+    media_store/ — that's what goes into chunk metadata, so citations keep
+    working after the project moves machines."""
     os.makedirs(AUDIO_DIR, exist_ok=True)
+    digest = hashlib.sha1()
     with open(src, "rb") as f:
-        digest = hashlib.sha1(f.read()).hexdigest()[:16]
+        for block in iter(lambda: f.read(1 << 20), b""):
+            digest.update(block)
     ext = os.path.splitext(src)[1] or ".audio"
-    dest = os.path.join(AUDIO_DIR, digest + ext)
+    dest = os.path.join(AUDIO_DIR, digest.hexdigest()[:16] + ext)
     if not os.path.exists(dest):
         shutil.copyfile(src, dest)
-    return dest
+    return media_relpath(dest)
 
 
 def build_audio_chunks(src_path, source_name):

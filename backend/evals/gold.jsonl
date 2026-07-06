@@ -24,3 +24,6 @@
 {"id": "E2", "question": "According to the access-time table, what is the access complexity of a linked list?", "expected_source_name": "data_structures_slides", "expected_source_type": "pdf_figure", "expected_page": 2, "answer_keywords": ["o(n)"]}
 {"id": "E3", "question": "Which data structure makes insertion cheap according to the overview?", "expected_source_name": "data_structures_slides", "expected_source_type": "pdf_text", "expected_page": 1, "answer_keywords": ["linked"]}
 {"id": "OOC3", "question": "What year did World War II end?", "expected": "refusal"}
+{"id": "OOC4", "question": "What is the time complexity of the A* search algorithm?", "expected": "refusal"}
+{"id": "OOC5", "question": "How does insertion sort work, and what is its time complexity?", "expected": "refusal"}
+{"id": "OOC6", "question": "What are the rotation rules for rebalancing a red-black tree?", "expected": "refusal"}

@@ -49,7 +49,14 @@ MAX_FIGURE_DIM = 1600        # downscale longest side to this before captioning
 # to 16 kHz mono FLAC (Groq-recommended, shrinks files a lot) and split anything
 # still over the cap into fixed time windows.
 WHISPER_MAX_BYTES = 24 * 1024 * 1024   # 24 MB, safety margin under the 25 MB cap
-SEGMENT_SECONDS = 600                    # 10-minute split windows
+# 5-minute windows: measured ~9.5 MB of FLAC for real speech (10 min ran ~19 MB
+# — too close to the cap), and smaller requests fail/retry cheaply.
+SEGMENT_SECONDS = 300
+# Uploading a ~20 MB piece and transcribing many minutes of audio comfortably
+# exceeds the Groq SDK's 60 s default timeout (observed: APITimeoutError on a
+# 15-minute lecture). Give transcription calls room; retries stay on top.
+WHISPER_TIMEOUT_S = 300
+WHISPER_MAX_RETRIES = 3
 
 # ── FEATURE FLAGS ──────────────────────────────────────────────────────────
 # yt-dlp is blocked from datacenter IPs, so YouTube ingestion is a local-only
@@ -60,6 +67,32 @@ ENABLE_YOUTUBE = os.environ.get("ENABLE_YOUTUBE", "1") == "1"
 # grader-on vs grader-off (the ablation that quantifies its value).
 ENABLE_GRADER = os.environ.get("ENABLE_GRADER", "1") == "1"
 MAX_RETRIEVAL_ATTEMPTS = 2   # grade → reformulate → retry cap (avoid loops + cost)
+
+
+def media_relpath(path):
+    """Path to store in chunk metadata: relative to media_store/ so the library
+    survives machine moves and redeploys (absolute paths rot the moment the
+    project directory changes)."""
+    return os.path.relpath(path, MEDIA_DIR)
+
+
+def resolve_media_path(path):
+    """Absolute path to a stored media file, given metadata that may hold a
+    relative path (current format) or an absolute path from the machine that
+    ingested it (legacy format — re-rooted onto this machine's media_store/).
+    Returns None for empty input; existence is the caller's check."""
+    if not path:
+        return None
+    if not os.path.isabs(path):
+        return os.path.join(MEDIA_DIR, path)
+    if os.path.exists(path):
+        return path
+    parts = path.replace("\\", "/").split("/")
+    if "media_store" in parts:
+        tail = parts[parts.index("media_store") + 1:]
+        if tail:
+            return os.path.join(MEDIA_DIR, *tail)
+    return path
 
 
 def seconds_to_timestamp(seconds):

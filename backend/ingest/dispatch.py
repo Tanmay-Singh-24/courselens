@@ -14,18 +14,23 @@ AUDIO_EXTS = {".mp3", ".m4a", ".wav", ".flac", ".aac", ".ogg", ".opus", ".mp4"}
 
 
 def _file_hash(path):
+    digest = hashlib.sha1()
     with open(path, "rb") as f:
-        return hashlib.sha1(f.read()).hexdigest()
+        for block in iter(lambda: f.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def ingest_file(path, filename):
-    """Route an uploaded file by extension, store its chunks, return the count.
-    Idempotent: re-ingesting identical content (same bytes) is a no-op (returns 0)."""
+    """Route an uploaded file by extension and store its chunks.
+    Returns the chunk count, or None if this exact content (same bytes) is
+    already in the library — the caller can tell a duplicate apart from a file
+    that genuinely produced no chunks."""
     ext = os.path.splitext(filename)[1].lower()
     source_name = os.path.splitext(os.path.basename(filename))[0]
     h = _file_hash(path)
     if doc_hash_exists(h):
-        return 0                       # already ingested — don't duplicate chunks
+        return None                    # already ingested — don't duplicate chunks
     if ext in AUDIO_EXTS:
         chunks = build_audio_chunks(path, source_name)
     elif ext == ".pdf":
@@ -38,10 +43,11 @@ def ingest_file(path, filename):
 
 
 def ingest_youtube(url):
-    """Ingest a YouTube URL's audio; idempotent per URL. Returns the chunk count."""
+    """Ingest a YouTube URL's audio; idempotent per URL. Returns the chunk
+    count, or None if the URL was already ingested."""
     h = "yt:" + url
     if doc_hash_exists(h):
-        return 0
+        return None
     from backend.ingest.youtube import build_youtube_chunks
     chunks = build_youtube_chunks(url)
     for c in chunks:

@@ -1,24 +1,21 @@
 # CourseLens — Eval Results
 
-> This file is **auto-generated** — it's overwritten each time you run
-> `python -m backend.evals.run_evals`. The table below is the last *complete* result;
-> regenerate for the current gold set (needs a Groq key + tokens).
-
-Last complete run (grader ON, initial 14-question set + off-corpus):
-
 | Metric | grader ON | grader OFF |
 |---|---|---|
-| Retrieval hit-rate@5 | **100%** | 100% |
-| Groundedness (LLM-judge) | **100%** | 100% |
-| Off-corpus refusal accuracy | **100%** | **0%** |
+| Retrieval hit-rate@5 | 100% | 100% |
+| Answer keyword match | 100% | 100% |
+| Groundedness (LLM-judge) | 100% | 100% |
+| Refusal accuracy (off-corpus) | 100% | 100% |
+| Corpus questions (n) | 23 | 23 |
 
-**Headline / ablation:** the corrective-RAG grader takes off-corpus refusal accuracy
-from **0% → 100%** — without it, questions the course can't answer get answered anyway.
+### Per-modality hit-rate@5
 
-The gold set has since expanded to **26 questions** (23 corpus: 16 audio / 4 slide-text
-/ 3 figure, + 3 off-corpus). Regenerate the full table with:
+| Modality | grader ON | grader OFF |
+|---|---|---|
+| audio | 100% (n=16) | 100% (n=16) |
+| pdf_figure | 100% (n=3) | 100% (n=3) |
+| pdf_text | 100% (n=4) | 100% (n=4) |
 
-```bash
-rm backend/evals/.cache.json          # if the corpus changed
-python -m backend.evals.run_evals --ingest
-```
+### Ablation — corrective-RAG grader
+- Groundedness: **100% → 100%** (+0 pts) with the grader on.
+- Off-corpus refusal accuracy: **100% → 100%**.

@@ -1,7 +1,8 @@
-"""CourseLens — Streamlit UI (V1).
+"""CourseLens — Streamlit UI.
 
-Thin presentation layer: ingest lecture audio (and, locally, YouTube URLs) and
-chat with actionable, deep-linked citations. All logic lives in backend/.
+Thin presentation layer: ingest lecture audio, slide PDFs (and, locally,
+YouTube URLs), chat with actionable deep-linked citations, and explore the
+Course Map. All logic lives in backend/.
 
 Run from the project root:
     streamlit run frontend/app.py
@@ -37,7 +38,7 @@ if not os.environ.get("GROQ_API_KEY"):
     )
     st.stop()
 
-from backend.config import ENABLE_YOUTUBE            # noqa: E402
+from backend.config import ENABLE_YOUTUBE, resolve_media_path  # noqa: E402
 from backend.ingest.dispatch import ingest_file, ingest_youtube  # noqa: E402
 from backend.store import has_documents             # noqa: E402
 from backend import telemetry                        # noqa: E402
@@ -65,20 +66,29 @@ def render_sources(sources):
     with st.expander("Sources"):
         for s in sources:
             stype = s.get("source_type")
-            # Media paths live on ephemeral disk and can outlive a restart in the
-            # stored metadata — always check the file still exists before rendering.
-            if stype == "audio" and s.get("audio_path") and os.path.exists(s["audio_path"]):
-                st.markdown(f"**▶ {s['label']}**")
-                st.audio(s["audio_path"], start_time=int(s.get("ts_start") or 0))
+            # Media paths are stored relative to media_store/ (legacy rows may be
+            # absolute) and the disk is ephemeral on cloud deploys — resolve, then
+            # check the file still exists before rendering a player.
+            if stype == "audio":
+                path = resolve_media_path(s.get("audio_path"))
+                if path and os.path.exists(path):
+                    st.markdown(f"**▶ {s['label']}**")
+                    st.audio(path, start_time=int(s.get("ts_start") or 0))
+                else:
+                    st.markdown(f"- {s['label']} *(audio unavailable — re-ingest to restore playback)*")
             elif stype == "youtube" and s.get("youtube_url"):
                 t = int(s.get("ts_start") or 0)
                 st.markdown(f"- [{s['label']}]({s['youtube_url']}&t={t}s)")
-            elif stype == "pdf_figure" and s.get("figure_image_path") \
-                    and os.path.exists(s["figure_image_path"]):
-                st.markdown(f"**🖼 {s['label']}**")
-                st.image(s["figure_image_path"])
+            elif stype == "pdf_figure":
+                path = resolve_media_path(s.get("figure_image_path"))
+                if path and os.path.exists(path):
+                    st.markdown(f"**🖼 {s['label']}**")
+                    st.image(path)
+                else:
+                    st.markdown(f"- {s['label']} *(figure unavailable — re-ingest to restore it)*")
             else:
-                st.markdown(f"- {s['label']} *(media unavailable — re-ingest to restore playback)*")
+                # slide text (and anything unrecognized): a plain page citation
+                st.markdown(f"- 📄 {s['label']}")
 
 
 def render_verdicts(verdicts):
@@ -152,7 +162,7 @@ with st.sidebar:
 
     uploaded = st.file_uploader(
         "Add lecture audio or slides (PDF)",
-        type=["mp3", "m4a", "wav", "flac", "mp4", "pdf"],
+        type=["mp3", "m4a", "wav", "flac", "aac", "ogg", "opus", "mp4", "pdf"],
         accept_multiple_files=True,
     )
     for up in uploaded or []:
@@ -167,7 +177,12 @@ with st.sidebar:
             try:
                 n = ingest_file(tmp_path, up.name)
                 st.session_state.ingested.append(up.name)
-                st.success(f"Added {up.name} ({n} chunks)")
+                if n is None:
+                    st.info(f"{up.name} is already in your library — skipped.")
+                elif n == 0:
+                    st.warning(f"Nothing extractable found in {up.name}.")
+                else:
+                    st.success(f"Added {up.name} ({n} chunks)")
             except Exception as e:
                 if "rate_limit" in str(e).lower() or "429" in str(e):
                     st.warning(f"⚠️ {up.name}: Groq's free daily token limit is "
@@ -185,7 +200,10 @@ with st.sidebar:
                 try:
                     n = ingest_youtube(yt_url)
                     st.session_state.ingested.append(yt_url)
-                    st.success(f"Added video ({n} chunks)")
+                    if n is None:
+                        st.info("That video is already in your library — skipped.")
+                    else:
+                        st.success(f"Added video ({n} chunks)")
                 except Exception as e:
                     st.error(f"YouTube ingest failed: {e}")
 
