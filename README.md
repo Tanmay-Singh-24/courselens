@@ -62,14 +62,17 @@ Two things are worth calling out honestly:
 
 ## Screenshots
 
-_Drop captures into `docs/` (same file names) and they render here._
+> Add captures to `docs/` (`chat.png`, `course-map.png`), then uncomment the block
+> below to render them. Worth capturing: a cited answer with the **Sources** audio
+> player, an answer rendering a slide **figure inline**, the **Course Map**, and the
+> **eval table**.
 
+<!-- Uncomment once the images exist in docs/:
 | Chat — deep-linked citations | Course Map |
 |---|---|
 | ![Cited answer with audio seeked to the moment](docs/chat.png) | ![Concept graph over the course](docs/course-map.png) |
+-->
 
-Worth capturing: a cited answer with the **Sources** audio player, an answer that
-renders a slide **figure inline**, the **Course Map**, and the **eval table**.
 
 ## Tech stack
 
