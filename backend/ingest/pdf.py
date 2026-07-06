@@ -145,7 +145,8 @@ def _extract_figure_chunks(doc, source_name):
                 continue                   # decorative / junk
             path, b64 = _save_png(pix)
             caption = _caption_image(b64)
-            if caption.upper().startswith("SKIP"):
+            # None/empty caption (model returned no content) → skip, don't crash
+            if not caption or caption.upper().startswith("SKIP"):
                 continue
             chunks.append({
                 "text": caption,

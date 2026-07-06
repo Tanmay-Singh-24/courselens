@@ -35,7 +35,8 @@ def _llm():
 def _load_cache():
     if os.path.exists(CACHE_PATH):
         try:
-            return json.load(open(CACHE_PATH))
+            with open(CACHE_PATH) as f:
+                return json.load(f)
         except Exception:
             return {}
     return {}
@@ -43,7 +44,8 @@ def _load_cache():
 
 def _save_cache(c):
     os.makedirs(MEDIA_DIR, exist_ok=True)
-    json.dump(c, open(CACHE_PATH, "w"))
+    with open(CACHE_PATH, "w") as f:
+        json.dump(c, f)
 
 
 def _sources_text():

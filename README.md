@@ -103,6 +103,12 @@ Add a lecture (audio file or, locally, a YouTube URL) in the sidebar, wait for i
 to transcribe, then ask questions. Answers cite their sources; expand **Sources**
 to play the audio from the exact cited moment.
 
+The sidebar **Library** reads from the vector store, so it shows everything
+you've ingested — including after a page refresh or in a later session. A file
+that fails to ingest (e.g. a rate limit mid-transcription) is set aside with a
+**Retry failed files** button instead of being silently re-attempted on every
+interaction.
+
 > ffmpeg is bundled via `imageio-ffmpeg`, so no separate install is needed. A
 > 60–90 minute lecture is transcoded to FLAC and split automatically before
 > transcription.
@@ -167,6 +173,11 @@ same gate for a Jenkins server.
 Every query displays its **latency, total token usage, and retrieval-attempt count**
 in the UI, and appends a row to `query_log.csv` — cheap observability for tuning
 and cost tracking.
+
+Per-turn cost is bounded: the conversation history sent to the model is capped
+(`MAX_HISTORY_MESSAGES` in [`backend/config.py`](backend/config.py), default 10
+messages ≈ 5 Q&A turns), so long study sessions don't get slower and costlier
+with every question. The full conversation is still kept in the graph state.
 
 ## Deploy (Streamlit Community Cloud)
 

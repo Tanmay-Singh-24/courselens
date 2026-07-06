@@ -40,8 +40,13 @@ if not os.environ.get("GROQ_API_KEY"):
 
 from backend.config import ENABLE_YOUTUBE, resolve_media_path  # noqa: E402
 from backend.ingest.dispatch import ingest_file, ingest_youtube  # noqa: E402
-from backend.store import has_documents             # noqa: E402
+from backend.store import has_documents, list_sources  # noqa: E402
 from backend import telemetry                        # noqa: E402
+
+
+def is_rate_limit(e):
+    """True if an exception looks like a Groq free-tier rate limit."""
+    return "rate_limit" in str(e).lower() or "429" in str(e)
 
 st.set_page_config(page_title="CourseLens", page_icon="🎓")
 st.title("🎓 CourseLens")
@@ -56,6 +61,11 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "ingested" not in st.session_state:
     st.session_state.ingested = []
+# Files that failed ingestion this session. Without this, a failing file is
+# retried on EVERY rerun (each chat message!) because it stays in the uploader
+# widget — and transcription retries sleep 30-60s, freezing the UI each time.
+if "failed" not in st.session_state:
+    st.session_state.failed = set()
 
 
 def render_sources(sources):
@@ -166,7 +176,7 @@ with st.sidebar:
         accept_multiple_files=True,
     )
     for up in uploaded or []:
-        if up.name in st.session_state.ingested:
+        if up.name in st.session_state.ingested or up.name in st.session_state.failed:
             continue
         with st.spinner(f"Transcribing {up.name}… (this can take a minute)"):
             with tempfile.NamedTemporaryFile(
@@ -184,13 +194,20 @@ with st.sidebar:
                 else:
                     st.success(f"Added {up.name} ({n} chunks)")
             except Exception as e:
-                if "rate_limit" in str(e).lower() or "429" in str(e):
+                st.session_state.failed.add(up.name)
+                if is_rate_limit(e):
                     st.warning(f"⚠️ {up.name}: Groq's free daily token limit is "
                                "reached — try again after it resets.")
                 else:
                     st.error(f"Failed on {up.name}: {e}")
             finally:
                 os.unlink(tmp_path)
+
+    if st.session_state.failed:
+        st.warning("Failed to ingest: " + ", ".join(sorted(st.session_state.failed)))
+        if st.button("Retry failed files"):
+            st.session_state.failed.clear()
+            st.rerun()
 
     if ENABLE_YOUTUBE:
         st.divider()
@@ -208,9 +225,13 @@ with st.sidebar:
                     st.error(f"YouTube ingest failed: {e}")
 
     st.divider()
-    if st.session_state.ingested:
+    # Read the library from the store, not session state — the vector store
+    # persists across page refreshes and sessions, so returning users see what
+    # their library actually contains.
+    library = list_sources()
+    if library:
         st.subheader("Library")
-        for name in st.session_state.ingested:
+        for name in library:
             st.markdown(f"- {name}")
     else:
         st.info(
@@ -270,7 +291,7 @@ if question := st.chat_input("Ask about your course…"):
                 telemetry.log_query(question, result["latency_s"], result["total_tokens"],
                                     result["attempts"], len(sources))
             except Exception as e:
-                if "rate_limit" in str(e).lower() or "429" in str(e):
+                if is_rate_limit(e):
                     answer = ("⚠️ Groq's free-tier daily token limit has been reached — "
                               "please try again later. (This live demo runs on a single "
                               "free API key.)")

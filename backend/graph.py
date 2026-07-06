@@ -25,6 +25,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from backend.config import (
     ENABLE_GRADER,
+    MAX_HISTORY_MESSAGES,
     MAX_RETRIEVAL_ATTEMPTS,
     TEXT_MODEL,
     TOP_K,
@@ -102,6 +103,12 @@ def _parse_grade(raw):
         return {"relevant": True, "reason": "grader parse failed; defaulted to answering"}
 
 
+def _recent(messages):
+    """The slice of history each LLM call sees (state keeps the full conversation;
+    this caps only what goes to the model — see MAX_HISTORY_MESSAGES)."""
+    return messages[-MAX_HISTORY_MESSAGES:]
+
+
 # ── NODES ─────────────────────────────────────────────────────────────────────
 def rewrite_query(state: State) -> dict:
     """Turn a possibly context-dependent question into a standalone search query.
@@ -111,7 +118,9 @@ def rewrite_query(state: State) -> dict:
     if len(history) == 1:
         search_query = question
     else:
-        search_query = llm.invoke([SystemMessage(content=REWRITE_PROMPT)] + history).content.strip()
+        search_query = llm.invoke(
+            [SystemMessage(content=REWRITE_PROMPT)] + _recent(history)
+        ).content.strip()
     return {"search_query": search_query, "question": question, "attempts": 1, "verdicts": []}
 
 
@@ -163,9 +172,9 @@ def rewrite_retry(state: State) -> dict:
 
 
 def generate(state: State) -> dict:
-    """Answer from the retrieved context plus the conversation history."""
+    """Answer from the retrieved context plus the (capped) conversation history."""
     system = f"{SYSTEM_PROMPT}\n\nContext from the course materials:\n{state['context']}"
-    return {"messages": [llm.invoke([SystemMessage(content=system)] + state["messages"])]}
+    return {"messages": [llm.invoke([SystemMessage(content=system)] + _recent(state["messages"]))]}
 
 
 def no_answer(state: State) -> dict:

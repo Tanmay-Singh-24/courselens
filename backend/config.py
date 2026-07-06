@@ -68,6 +68,12 @@ ENABLE_YOUTUBE = os.environ.get("ENABLE_YOUTUBE", "1") == "1"
 ENABLE_GRADER = os.environ.get("ENABLE_GRADER", "1") == "1"
 MAX_RETRIEVAL_ATTEMPTS = 2   # grade → reformulate → retry cap (avoid loops + cost)
 
+# Cap the conversation history sent to the LLM each turn. The graph state keeps
+# the full conversation (add_messages appends forever), so without a cap long
+# study sessions get slower and costlier every turn and eventually overflow the
+# context window. 10 messages ≈ 5 Q&A turns — plenty for resolving references.
+MAX_HISTORY_MESSAGES = 10
+
 
 def media_relpath(path):
     """Path to store in chunk metadata: relative to media_store/ so the library
