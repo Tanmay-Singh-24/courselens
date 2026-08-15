@@ -7,6 +7,7 @@ Course Map. All logic lives in backend/.
 Run from the project root:
     streamlit run frontend/app.py
 """
+import inspect
 import logging
 import os
 import sys
@@ -43,6 +44,10 @@ if not os.environ.get("GROQ_API_KEY"):
 import groq                                          # noqa: E402
 from backend.config import ENABLE_YOUTUBE, resolve_media_path  # noqa: E402
 from backend.ingest.dispatch import ingest_file, ingest_youtube  # noqa: E402
+
+# Guards against a fresh entry script running against a stale cached backend
+# module after a redeploy (see the call site below).
+_ingest_accepts_warnings = "warnings" in inspect.signature(ingest_file).parameters
 from backend.store import has_documents, list_sources  # noqa: E402
 from backend import telemetry                        # noqa: E402
 
@@ -227,7 +232,13 @@ with st.sidebar:
                 tmp_path = tmp.name
             try:
                 warnings = []
-                n = ingest_file(tmp_path, up.name, warnings)
+                # Streamlit re-executes this script on every interaction but keeps
+                # already-imported modules in sys.modules, so after a redeploy a
+                # fresh app.py can run against a stale backend module. Checking the
+                # signature keeps a new call site compatible with an old callee
+                # instead of raising TypeError at the user.
+                n = (ingest_file(tmp_path, up.name, warnings)
+                     if _ingest_accepts_warnings else ingest_file(tmp_path, up.name))
                 st.session_state.ingested.append(up.name)
                 if n is None:
                     st.info(f"{up.name} is already in your library — skipped.")
