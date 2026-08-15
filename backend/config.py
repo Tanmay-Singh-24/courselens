@@ -12,6 +12,13 @@ import os
 
 from dotenv import load_dotenv
 
+# Bumped whenever backend behaviour changes. Streamlit re-executes the entry
+# script on every interaction but keeps already-imported modules in sys.modules,
+# so a redeploy can leave fresh UI code calling a stale backend. Surfacing this
+# in the UI makes "is the new code actually live?" answerable at a glance instead
+# of inferred from symptoms.
+BUILD = "v6.3-resilient-ingest"
+
 # ── PATHS ──────────────────────────────────────────────────────────────────
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(HERE)

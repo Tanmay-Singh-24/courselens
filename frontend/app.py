@@ -42,7 +42,7 @@ if not os.environ.get("GROQ_API_KEY"):
     st.stop()
 
 import groq                                          # noqa: E402
-from backend.config import ENABLE_YOUTUBE, resolve_media_path  # noqa: E402
+from backend.config import BUILD, ENABLE_YOUTUBE, resolve_media_path  # noqa: E402
 from backend.ingest.dispatch import ingest_file, ingest_youtube  # noqa: E402
 
 # Guards against a fresh entry script running against a stale cached backend
@@ -294,6 +294,11 @@ with st.sidebar:
         st.session_state.messages = []
         st.session_state.thread_id = str(uuid.uuid4())
         st.rerun()
+
+    # Build stamp: read from the backend package, so it reports the version of the
+    # code actually loaded in this process — not what's in the repo. A mismatch
+    # after a deploy means the modules are stale and the app needs a reboot.
+    st.caption(f"build {BUILD}")
 
 
 # ── COURSE MAP view short-circuits the chat below ─────────────────────────────
