@@ -10,6 +10,7 @@ Run from the project root:
 import logging
 import os
 import sys
+import traceback
 import uuid
 import tempfile
 
@@ -72,10 +73,15 @@ def friendly_error(e, subject=None):
                 "automatically — please try again in a minute.")
     if status in (401, 403):
         return f"{what}The server's API key was rejected. (Configuration issue, not your upload.)"
-    # Unrecognized failure: name the exception type so a report is actionable
-    # ("TypeError" tells us far more than "something went wrong") without
-    # dumping a traceback at the user.
-    return (f"{what}Something went wrong ({type(e).__name__}). Please try again — "
+    # Unrecognized failure: name the exception type and the code location that
+    # raised it. One line of provenance ("TypeError at pdf.py:147") makes a user
+    # report actionable without dumping a traceback at them.
+    where = ""
+    tb = traceback.extract_tb(e.__traceback__)
+    if tb:
+        frame = tb[-1]
+        where = f" at {os.path.basename(frame.filename)}:{frame.lineno}"
+    return (f"{what}Something went wrong ({type(e).__name__}{where}). Please try again — "
             "if it persists, the file may be unsupported.")
 
 st.set_page_config(page_title="CourseLens", page_icon="🎓")
