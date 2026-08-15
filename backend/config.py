@@ -92,6 +92,14 @@ MAX_FIGURES_PER_DOC = 6
 # ~9x (measured) — real savings against a 100k/day free-tier budget.
 VISION_REASONING_EFFORT = "none"
 VISION_MAX_TOKENS = 300
+# A single vision request must not hang: bound it, and let our own retry layer be
+# the ONLY retry layer. The SDK retries internally by default, which multiplies
+# with ours (3 attempts x 3 SDK tries = 9 requests per figure) and turns a slow
+# provider into an ingestion that looks frozen.
+VISION_TIMEOUT_S = 45
+# Hard ceiling on time spent describing figures in one document. Whatever is
+# captioned by then is kept, the rest is skipped, and ingestion always finishes.
+FIGURE_TIME_BUDGET_S = 150
 
 # Corrective-RAG grader (V3). Toggleable so the V4 eval harness can measure
 # grader-on vs grader-off (the ablation that quantifies its value).

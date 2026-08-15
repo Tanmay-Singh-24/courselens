@@ -12,6 +12,7 @@ NOT extracted — PyMuPDF only yields raster images (a documented limitation).
 import os
 import io
 import re
+import time
 import base64
 import hashlib
 
@@ -25,7 +26,9 @@ from backend.config import (
     FIGURE_CAPTION_ATTEMPTS,
     FIGURE_FAILURE_STREAK,
     FIGURES_DIR,
+    FIGURE_TIME_BUDGET_S,
     MAX_FIGURES_PER_DOC,
+    VISION_TIMEOUT_S,
     VISION_MAX_TOKENS,
     VISION_REASONING_EFFORT,
     MAX_FIGURE_DIM,
@@ -45,7 +48,10 @@ def _client():
     global _groq_client
     if _groq_client is None:
         from groq import Groq
-        _groq_client = Groq()
+        # Bounded request, and max_retries=0 so call_with_retry is the only retry
+        # layer — the SDK's own retries would multiply with ours and make a slow
+        # provider look like a hang.
+        _groq_client = Groq(timeout=VISION_TIMEOUT_S, max_retries=0)
     return _groq_client
 
 
@@ -154,6 +160,9 @@ def _extract_figure_chunks(doc, source_name, warnings=None):
     chunks, seen = [], set()
     failures = streak = skipped_for_budget = 0
     provider_down = quota_hit = False
+    # Whatever is captioned within the budget is kept; the rest is skipped, so
+    # ingestion finishes in bounded time however slow the provider is.
+    deadline = time.monotonic() + FIGURE_TIME_BUDGET_S
 
     for i in range(len(doc)):
         for img in doc[i].get_images(full=True):
@@ -170,7 +179,7 @@ def _extract_figure_chunks(doc, source_name, warnings=None):
             if provider_down:              # circuit open — don't keep hammering
                 failures += 1
                 continue
-            if len(chunks) >= MAX_FIGURES_PER_DOC:
+            if len(chunks) >= MAX_FIGURES_PER_DOC or time.monotonic() > deadline:
                 skipped_for_budget += 1
                 continue
             try:
