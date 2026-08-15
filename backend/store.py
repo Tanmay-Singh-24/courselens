@@ -28,8 +28,15 @@ def _clean_metadata(meta):
     return {k: v for k, v in meta.items() if v is not None}
 
 
+# Embedding is the memory peak of ingestion. A long PDF can produce hundreds of
+# chunks, and embedding them in one call spikes RAM well past what a small hosted
+# instance (Streamlit Cloud ≈ 1 GB, already holding PyTorch) can absorb. Batching
+# keeps the peak flat and costs nothing in speed.
+EMBED_BATCH = 64
+
+
 def add_chunks(chunks):
-    """Add chunk dicts to the collection.
+    """Add chunk dicts to the collection, embedding in batches.
 
     Each chunk is {"text": str, "metadata": dict}. Returns the number added.
     """
@@ -38,8 +45,8 @@ def add_chunks(chunks):
         for c in chunks
         if c["text"].strip()
     ]
-    if docs:
-        vectorstore.add_documents(docs)
+    for i in range(0, len(docs), EMBED_BATCH):
+        vectorstore.add_documents(docs[i:i + EMBED_BATCH])
     return len(docs)
 
 

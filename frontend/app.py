@@ -7,6 +7,7 @@ Course Map. All logic lives in backend/.
 Run from the project root:
     streamlit run frontend/app.py
 """
+import logging
 import os
 import sys
 import uuid
@@ -55,8 +56,11 @@ def friendly_error(e, subject=None):
 
     Raw tracebacks and status dumps ("Error code: 503 - … over capacity") are
     never shown: by the time one surfaces we've already retried with backoff, so
-    the only useful message is what the user should do next.
+    the only useful message is what the user should do next. The full traceback
+    still goes to the server log (Streamlit Cloud → Manage app), so a friendly UI
+    doesn't mean flying blind.
     """
+    logging.exception("ingest/answer failed%s", f" [{subject}]" if subject else "")
     what = f"**{subject}**: " if subject else ""
     status = getattr(e, "status_code", None)
     if is_rate_limit(e):
@@ -68,7 +72,11 @@ def friendly_error(e, subject=None):
                 "automatically — please try again in a minute.")
     if status in (401, 403):
         return f"{what}The server's API key was rejected. (Configuration issue, not your upload.)"
-    return f"{what}Something went wrong. Please try again — if it persists, the file may be unsupported."
+    # Unrecognized failure: name the exception type so a report is actionable
+    # ("TypeError" tells us far more than "something went wrong") without
+    # dumping a traceback at the user.
+    return (f"{what}Something went wrong ({type(e).__name__}). Please try again — "
+            "if it persists, the file may be unsupported.")
 
 st.set_page_config(page_title="CourseLens", page_icon="🎓")
 st.title("🎓 CourseLens")

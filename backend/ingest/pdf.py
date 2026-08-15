@@ -157,8 +157,10 @@ def _extract_figure_chunks(doc, source_name, warnings=None):
             if provider_down:              # circuit open — don't keep hammering
                 failures += 1
                 continue
-            path, b64 = _save_png(pix)
             try:
+                # Image normalisation (CMYK/alpha conversion, downscaling) is in
+                # here too: a single odd image must not cost the document either.
+                path, b64 = _save_png(pix)
                 caption = _caption_image(b64)
                 streak = 0
             except Exception:
