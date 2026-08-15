@@ -31,6 +31,7 @@ from backend.config import (
     TOP_K,
     seconds_to_timestamp,
 )
+from backend.retry import call_with_retry
 from backend.store import list_sources, similarity_search
 
 # temperature=0: grounded, repeatable answers (and repeatable grading), not creativity.
@@ -118,8 +119,8 @@ def rewrite_query(state: State) -> dict:
     if len(history) == 1:
         search_query = question
     else:
-        search_query = llm.invoke(
-            [SystemMessage(content=REWRITE_PROMPT)] + _recent(history)
+        search_query = call_with_retry(
+            lambda: llm.invoke([SystemMessage(content=REWRITE_PROMPT)] + _recent(history))
         ).content.strip()
     return {"search_query": search_query, "question": question, "attempts": 1, "verdicts": []}
 
@@ -153,28 +154,30 @@ def grade(state: State) -> dict:
     if not context.strip():
         verdict = {"relevant": False, "reason": "no context retrieved"}
     else:
-        raw = llm.invoke([
+        raw = call_with_retry(lambda: llm.invoke([
             SystemMessage(content=GRADER_PROMPT),
             HumanMessage(content=f"Question: {state['question']}\n\nRetrieved context:\n{context}"),
-        ]).content
+        ])).content
         verdict = _parse_grade(raw)
     return {"grade": verdict, "verdicts": state.get("verdicts", []) + [{"attempt": state["attempts"], **verdict}]}
 
 
 def rewrite_retry(state: State) -> dict:
     """Reformulate the query with different words and bump the attempt counter."""
-    new_query = llm.invoke([
+    new_query = call_with_retry(lambda: llm.invoke([
         SystemMessage(content=RETRY_PROMPT),
         HumanMessage(content=f"Original question: {state['question']}\n"
                              f"Previous query that failed: {state['search_query']}\nNew query:"),
-    ]).content.strip()
+    ])).content.strip()
     return {"search_query": new_query, "attempts": state["attempts"] + 1}
 
 
 def generate(state: State) -> dict:
     """Answer from the retrieved context plus the (capped) conversation history."""
     system = f"{SYSTEM_PROMPT}\n\nContext from the course materials:\n{state['context']}"
-    return {"messages": [llm.invoke([SystemMessage(content=system)] + _recent(state["messages"]))]}
+    return {"messages": [call_with_retry(
+        lambda: llm.invoke([SystemMessage(content=system)] + _recent(state["messages"]))
+    )]}
 
 
 def no_answer(state: State) -> dict:

@@ -15,6 +15,7 @@ from collections import defaultdict
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from backend.config import MEDIA_DIR
+from backend.retry import call_with_retry
 from backend.store import vectorstore
 
 CACHE_PATH = os.path.join(MEDIA_DIR, "concept_cache.json")
@@ -68,10 +69,10 @@ def _parse_concepts(raw):
 
 
 def _extract_concepts(text):
-    raw = _llm().invoke([
+    raw = call_with_retry(lambda: _llm().invoke([
         SystemMessage(content=EXTRACT_PROMPT),
         HumanMessage(content=text[:4000]),
-    ]).content
+    ])).content
     return _parse_concepts(raw)
 
 

@@ -36,6 +36,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from backend import graph as G
 from backend.config import TOP_K
+from backend.retry import call_with_retry
 from backend.store import similarity_search
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -222,10 +223,10 @@ def _judge_groundedness(answer, context):
     # the model's window). Truncating it would flag answers as ungrounded merely
     # because their supporting chunk fell past the cutoff. 12000 chars is a
     # safety cap, not an expected truncation point.
-    raw = G.llm.invoke([
+    raw = call_with_retry(lambda: G.llm.invoke([
         SystemMessage(content=JUDGE_PROMPT),
         HumanMessage(content=f"CONTEXT:\n{context[:12000]}\n\nANSWER:\n{answer}"),
-    ]).content
+    ])).content
     return _parse_groundedness(raw)
 
 

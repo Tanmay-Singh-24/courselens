@@ -14,8 +14,6 @@ import shutil
 import hashlib
 import subprocess
 import tempfile
-import time
-
 from backend.config import (
     AUDIO_DIR,
     CHUNK_CHARS,
@@ -26,6 +24,7 @@ from backend.config import (
     WHISPER_TIMEOUT_S,
     media_relpath,
 )
+from backend.retry import call_with_retry
 
 _groq_client = None
 
@@ -101,30 +100,29 @@ def _seg(obj, key):
     return obj[key] if isinstance(obj, dict) else getattr(obj, key)
 
 
-def _transcribe_segment(path, offset, retries=3):
+def _transcribe_segment(path, offset):
     """Transcribe one file; return segments shifted to GLOBAL timestamps.
-    The SDK retries transient failures per request already; this outer loop adds
-    longer-horizon retries with a pause (Groq's Whisper endpoint occasionally
-    returns 502 under load) so one blip doesn't lose the whole lecture."""
-    import groq
+
+    Uses the shared retry (which also covers 429, previously unhandled here) with
+    a larger base delay: Groq 502s on the Whisper endpoint arrive in waves lasting
+    minutes (observed on real lectures), so this path needs to wait longer than a
+    chat call before giving up.
+    """
     with open(path, "rb") as f:
         payload = f.read()
-    for attempt in range(retries):
-        try:
-            resp = _client().audio.transcriptions.create(
-                file=(os.path.basename(path), payload),
-                model=WHISPER_MODEL,
-                response_format="verbose_json",
-                timestamp_granularities=["segment"],
-            )
-            break
-        except (groq.InternalServerError, groq.APIConnectionError) as e:
-            if attempt == retries - 1:
-                raise
-            print(f"transcription retry {attempt + 1}/{retries - 1} after {type(e).__name__}")
-            # Groq 502s arrive in waves lasting minutes (observed on real
-            # lectures) — short pauses don't outlive them.
-            time.sleep(30 * (attempt + 1))   # 30s, 60s
+
+    def _once():
+        return _client().audio.transcriptions.create(
+            file=(os.path.basename(path), payload),
+            model=WHISPER_MODEL,
+            response_format="verbose_json",
+            timestamp_granularities=["segment"],
+        )
+
+    def _log(exc, attempt, delay):
+        print(f"transcription retry {attempt} after {type(exc).__name__} — waiting {delay:.0f}s")
+
+    resp = call_with_retry(_once, base=6.0, on_retry=_log)
     segments = getattr(resp, "segments", None) or []
     return [
         {

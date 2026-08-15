@@ -12,7 +12,6 @@ NOT extracted — PyMuPDF only yields raster images (a documented limitation).
 import os
 import io
 import re
-import time
 import base64
 import hashlib
 
@@ -28,6 +27,7 @@ from backend.config import (
     VISION_MODEL,
     media_relpath,
 )
+from backend.retry import call_with_retry
 
 _splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_CHARS, chunk_overlap=CHUNK_OVERLAP)
 _groq_client = None
@@ -104,29 +104,29 @@ def _strip_think(text):
     return re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
 
 
-def _caption_image(b64, retries=3):
-    """Ask the Groq vision model for a retrieval-useful caption. Retries with
-    backoff on rate limits so one 429 mid-deck doesn't lose the whole ingestion."""
-    import groq
-    for attempt in range(retries):
-        try:
-            resp = _client().chat.completions.create(
-                model=VISION_MODEL,
-                temperature=0,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": CAPTION_PROMPT},
-                        {"type": "image_url",
-                         "image_url": {"url": f"data:image/png;base64,{b64}"}},
-                    ],
-                }],
-            )
-            return _strip_think(resp.choices[0].message.content)
-        except groq.RateLimitError:
-            if attempt == retries - 1:
-                raise
-            time.sleep(2 ** (attempt + 1))   # 2s, 4s
+def _caption_image(b64):
+    """Ask the Groq vision model for a retrieval-useful caption.
+
+    Wrapped in the shared retry: the vision model is the busiest thing we call,
+    and a capacity blip (503) mid-deck used to lose the whole ingestion — text
+    chunks included — because only 429 was handled here.
+    """
+    def _once():
+        resp = _client().chat.completions.create(
+            model=VISION_MODEL,
+            temperature=0,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": CAPTION_PROMPT},
+                    {"type": "image_url",
+                     "image_url": {"url": f"data:image/png;base64,{b64}"}},
+                ],
+            }],
+        )
+        return _strip_think(resp.choices[0].message.content)
+
+    return call_with_retry(_once)
 
 
 def _extract_figure_chunks(doc, source_name):

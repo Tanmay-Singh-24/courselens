@@ -38,6 +38,7 @@ if not os.environ.get("GROQ_API_KEY"):
     )
     st.stop()
 
+import groq                                          # noqa: E402
 from backend.config import ENABLE_YOUTUBE, resolve_media_path  # noqa: E402
 from backend.ingest.dispatch import ingest_file, ingest_youtube  # noqa: E402
 from backend.store import has_documents, list_sources  # noqa: E402
@@ -46,7 +47,28 @@ from backend import telemetry                        # noqa: E402
 
 def is_rate_limit(e):
     """True if an exception looks like a Groq free-tier rate limit."""
-    return "rate_limit" in str(e).lower() or "429" in str(e)
+    return getattr(e, "status_code", None) == 429 or "rate_limit" in str(e).lower()
+
+
+def friendly_error(e, subject=None):
+    """Turn a provider exception into something a first-time visitor can act on.
+
+    Raw tracebacks and status dumps ("Error code: 503 - … over capacity") are
+    never shown: by the time one surfaces we've already retried with backoff, so
+    the only useful message is what the user should do next.
+    """
+    what = f"**{subject}**: " if subject else ""
+    status = getattr(e, "status_code", None)
+    if is_rate_limit(e):
+        return (f"{what}Groq's free-tier limit is reached — this live demo runs on a "
+                "single free API key. Please try again in a minute.")
+    if status in (408, 500, 502, 503, 529) or isinstance(
+            e, (groq.APIConnectionError, groq.APITimeoutError)):
+        return (f"{what}The model provider is busy right now. We retried a few times "
+                "automatically — please try again in a minute.")
+    if status in (401, 403):
+        return f"{what}The server's API key was rejected. (Configuration issue, not your upload.)"
+    return f"{what}Something went wrong. Please try again — if it persists, the file may be unsupported."
 
 st.set_page_config(page_title="CourseLens", page_icon="🎓")
 st.title("🎓 CourseLens")
@@ -138,8 +160,13 @@ def render_course_map():
     from backend.concept_map import build_concept_map
     from backend.store import similarity_search
 
-    with st.spinner("Building concept map…"):
-        nodes_data, edges_data, concept_sources = build_concept_map()
+    try:
+        with st.spinner("Building concept map…"):
+            nodes_data, edges_data, concept_sources = build_concept_map()
+    except Exception as e:
+        # Concept extraction is an LLM call — a provider blip must not traceback.
+        st.warning(f"⚠️ {friendly_error(e, 'Course Map')}")
+        return
     if not nodes_data:
         st.info("Couldn't extract concepts from the current library yet.")
         return
@@ -195,11 +222,7 @@ with st.sidebar:
                     st.success(f"Added {up.name} ({n} chunks)")
             except Exception as e:
                 st.session_state.failed.add(up.name)
-                if is_rate_limit(e):
-                    st.warning(f"⚠️ {up.name}: Groq's free daily token limit is "
-                               "reached — try again after it resets.")
-                else:
-                    st.error(f"Failed on {up.name}: {e}")
+                st.warning(f"⚠️ {friendly_error(e, up.name)}")
             finally:
                 os.unlink(tmp_path)
 
@@ -222,7 +245,7 @@ with st.sidebar:
                     else:
                         st.success(f"Added video ({n} chunks)")
                 except Exception as e:
-                    st.error(f"YouTube ingest failed: {e}")
+                    st.warning(f"⚠️ {friendly_error(e, 'YouTube video')}")
 
     st.divider()
     # Read the library from the store, not session state — the vector store
@@ -291,12 +314,7 @@ if question := st.chat_input("Ask about your course…"):
                 telemetry.log_query(question, result["latency_s"], result["total_tokens"],
                                     result["attempts"], len(sources))
             except Exception as e:
-                if is_rate_limit(e):
-                    answer = ("⚠️ Groq's free-tier daily token limit has been reached — "
-                              "please try again later. (This live demo runs on a single "
-                              "free API key.)")
-                else:
-                    answer = f"⚠️ Something went wrong answering that: {str(e)[:200]}"
+                answer = f"⚠️ {friendly_error(e)}"
                 sources, verdicts, stats = [], [], None
                 st.warning(answer)
 
