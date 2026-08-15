@@ -82,6 +82,16 @@ FIGURE_FAILURE_STREAK = 2
 # Captioning retries less than generation: it's optional work, so failing fast
 # and keeping the text matters more than eventually succeeding.
 FIGURE_CAPTION_ATTEMPTS = 3
+# Each vision call costs ~30s of provider latency, so a figure-heavy paper (a
+# 68-page arXiv PDF has 7-15) turns ingestion into a multi-minute wait. Cap the
+# figures we describe per document: the text is always fully indexed, and the
+# first handful of figures carries most of the value.
+MAX_FIGURES_PER_DOC = 6
+# qwen3.6 is a reasoning model: left alone it spends ~350 tokens thinking before
+# a ~40-token caption, and we throw the reasoning away. Disabling it cuts tokens
+# ~9x (measured) — real savings against a 100k/day free-tier budget.
+VISION_REASONING_EFFORT = "none"
+VISION_MAX_TOKENS = 300
 
 # Corrective-RAG grader (V3). Toggleable so the V4 eval harness can measure
 # grader-on vs grader-off (the ablation that quantifies its value).

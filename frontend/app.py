@@ -42,7 +42,9 @@ if not os.environ.get("GROQ_API_KEY"):
     st.stop()
 
 import groq                                          # noqa: E402
-from backend.config import BUILD, ENABLE_YOUTUBE, resolve_media_path  # noqa: E402
+from backend.config import (  # noqa: E402
+    BUILD, ENABLE_YOUTUBE, MAX_FIGURES_PER_DOC, resolve_media_path,
+)
 from backend.ingest.dispatch import ingest_file, ingest_youtube  # noqa: E402
 
 # Guards against a fresh entry script running against a stale cached backend
@@ -224,7 +226,14 @@ with st.sidebar:
     for up in uploaded or []:
         if up.name in st.session_state.ingested or up.name in st.session_state.failed:
             continue
-        with st.spinner(f"Transcribing {up.name}… (this can take a minute)"):
+        # Be specific about the wait: describing a figure costs ~30s of provider
+        # latency, so a figure-heavy PDF is genuinely slow. A vague "this can take
+        # a minute" on a 4-minute job reads as a hang.
+        is_pdf = up.name.lower().endswith(".pdf")
+        note = ("reading text, then describing up to "
+                f"{MAX_FIGURES_PER_DOC} figures (~30s each)" if is_pdf
+                else "transcribing audio")
+        with st.spinner(f"Ingesting {up.name} — {note}…"):
             with tempfile.NamedTemporaryFile(
                 delete=False, suffix=os.path.splitext(up.name)[1]
             ) as tmp:

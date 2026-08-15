@@ -25,6 +25,9 @@ from backend.config import (
     FIGURE_CAPTION_ATTEMPTS,
     FIGURE_FAILURE_STREAK,
     FIGURES_DIR,
+    MAX_FIGURES_PER_DOC,
+    VISION_MAX_TOKENS,
+    VISION_REASONING_EFFORT,
     MAX_FIGURE_DIM,
     MIN_FIGURE_PX,
     VISION_MODEL,
@@ -124,6 +127,10 @@ def _caption_image(b64):
         resp = _client().chat.completions.create(
             model=VISION_MODEL,
             temperature=0,
+            # Skip the reasoning pass: we discard it anyway, and it costs ~9x the
+            # tokens of the caption itself.
+            reasoning_effort=VISION_REASONING_EFFORT,
+            max_tokens=VISION_MAX_TOKENS,
             messages=[{
                 "role": "user",
                 "content": [
@@ -145,8 +152,8 @@ def _extract_figure_chunks(doc, source_name, warnings=None):
     stop calling the model at all, so a provider outage costs seconds, not the
     retry budget of every remaining figure."""
     chunks, seen = [], set()
-    failures = streak = 0
-    provider_down = False
+    failures = streak = skipped_for_budget = 0
+    provider_down = quota_hit = False
 
     for i in range(len(doc)):
         for img in doc[i].get_images(full=True):
@@ -163,15 +170,23 @@ def _extract_figure_chunks(doc, source_name, warnings=None):
             if provider_down:              # circuit open — don't keep hammering
                 failures += 1
                 continue
+            if len(chunks) >= MAX_FIGURES_PER_DOC:
+                skipped_for_budget += 1
+                continue
             try:
                 # Image normalisation (CMYK/alpha conversion, downscaling) is in
                 # here too: a single odd image must not cost the document either.
                 path, b64 = _save_png(pix)
                 caption = _caption_image(b64)
                 streak = 0
-            except Exception:
+            except Exception as exc:
                 failures += 1
                 streak += 1
+                # Distinguish "out of quota" from "temporarily busy": one clears
+                # at the daily reset, the other in a minute. Telling the user to
+                # retry shortly when the budget is gone just wastes their time.
+                if getattr(exc, "status_code", None) == 429:
+                    quota_hit = True
                 if streak >= FIGURE_FAILURE_STREAK:
                     provider_down = True
                 continue
@@ -189,11 +204,20 @@ def _extract_figure_chunks(doc, source_name, warnings=None):
                 },
             })
 
-    if failures and warnings is not None:
-        warnings.append(
-            f"{failures} figure(s) couldn't be described (the vision model is busy) — "
-            "the text is fully searchable; re-upload later to add the figures."
-        )
+    if warnings is not None:
+        if failures:
+            why = ("the free-tier daily image-description quota is used up"
+                   if quota_hit else "the vision model is busy")
+            when = "after the quota resets" if quota_hit else "in a few minutes"
+            warnings.append(
+                f"{failures} figure(s) couldn't be described ({why}) — all text from "
+                f"this document is fully searchable; re-upload {when} to add the figures."
+            )
+        if skipped_for_budget:
+            warnings.append(
+                f"Described the first {MAX_FIGURES_PER_DOC} figures and skipped "
+                f"{skipped_for_budget} more to keep ingestion quick — all text is indexed."
+            )
     return chunks
 
 
