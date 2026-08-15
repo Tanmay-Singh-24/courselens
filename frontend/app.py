@@ -212,7 +212,8 @@ with st.sidebar:
                 tmp.write(up.getvalue())
                 tmp_path = tmp.name
             try:
-                n = ingest_file(tmp_path, up.name)
+                warnings = []
+                n = ingest_file(tmp_path, up.name, warnings)
                 st.session_state.ingested.append(up.name)
                 if n is None:
                     st.info(f"{up.name} is already in your library — skipped.")
@@ -220,6 +221,8 @@ with st.sidebar:
                     st.warning(f"Nothing extractable found in {up.name}.")
                 else:
                     st.success(f"Added {up.name} ({n} chunks)")
+                for w in warnings:      # partial success, e.g. figures skipped
+                    st.info(f"ℹ️ {w}")
             except Exception as e:
                 st.session_state.failed.add(up.name)
                 st.warning(f"⚠️ {friendly_error(e, up.name)}")

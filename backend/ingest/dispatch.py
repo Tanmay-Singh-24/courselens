@@ -21,11 +21,15 @@ def _file_hash(path):
     return digest.hexdigest()
 
 
-def ingest_file(path, filename):
+def ingest_file(path, filename, warnings=None):
     """Route an uploaded file by extension and store its chunks.
     Returns the chunk count, or None if this exact content (same bytes) is
     already in the library — the caller can tell a duplicate apart from a file
-    that genuinely produced no chunks."""
+    that genuinely produced no chunks.
+
+    `warnings` (optional list) collects non-fatal problems the caller may want to
+    show the user, e.g. PDF figures skipped because the vision model was busy.
+    """
     ext = os.path.splitext(filename)[1].lower()
     source_name = os.path.splitext(os.path.basename(filename))[0]
     h = _file_hash(path)
@@ -34,7 +38,7 @@ def ingest_file(path, filename):
     if ext in AUDIO_EXTS:
         chunks = build_audio_chunks(path, source_name)
     elif ext == ".pdf":
-        chunks = build_pdf_chunks(path, source_name)
+        chunks = build_pdf_chunks(path, source_name, warnings)
     else:
         raise NotImplementedError(f"'{ext}' isn't a supported file type.")
     for c in chunks:

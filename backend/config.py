@@ -63,6 +63,19 @@ WHISPER_MAX_RETRIES = 3
 # bonus — disable it in hosted deploys via ENABLE_YOUTUBE=0.
 ENABLE_YOUTUBE = os.environ.get("ENABLE_YOUTUBE", "1") == "1"
 
+# Figure captioning needs the vision model, which is the least reliable thing we
+# call (frequent 503s under load). It is best-effort: a PDF's text always ingests
+# even when captioning fails. Set ENABLE_FIGURE_CAPTIONS=0 to skip it entirely —
+# an operational escape hatch when the vision model is having a bad day.
+ENABLE_FIGURE_CAPTIONS = os.environ.get("ENABLE_FIGURE_CAPTIONS", "1") == "1"
+# After this many figures in a row fail, stop calling the vision model for the
+# rest of the document. Without it, a 20-figure paper during an outage means
+# 20 × (retries + backoff) of the user watching a spinner.
+FIGURE_FAILURE_STREAK = 2
+# Captioning retries less than generation: it's optional work, so failing fast
+# and keeping the text matters more than eventually succeeding.
+FIGURE_CAPTION_ATTEMPTS = 3
+
 # Corrective-RAG grader (V3). Toggleable so the V4 eval harness can measure
 # grader-on vs grader-off (the ablation that quantifies its value).
 ENABLE_GRADER = os.environ.get("ENABLE_GRADER", "1") == "1"

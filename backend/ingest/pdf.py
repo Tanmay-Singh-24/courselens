@@ -21,6 +21,9 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from backend.config import (
     CHUNK_CHARS,
     CHUNK_OVERLAP,
+    ENABLE_FIGURE_CAPTIONS,
+    FIGURE_CAPTION_ATTEMPTS,
+    FIGURE_FAILURE_STREAK,
     FIGURES_DIR,
     MAX_FIGURE_DIM,
     MIN_FIGURE_PX,
@@ -126,11 +129,19 @@ def _caption_image(b64):
         )
         return _strip_think(resp.choices[0].message.content)
 
-    return call_with_retry(_once)
+    return call_with_retry(_once, attempts=FIGURE_CAPTION_ATTEMPTS)
 
 
-def _extract_figure_chunks(doc, source_name):
+def _extract_figure_chunks(doc, source_name, warnings=None):
+    """Caption each real figure. Best-effort by design: a figure we can't caption
+    is skipped, never fatal — the document's text is the bulk of its value and
+    needs no vision model. After FIGURE_FAILURE_STREAK consecutive failures we
+    stop calling the model at all, so a provider outage costs seconds, not the
+    retry budget of every remaining figure."""
     chunks, seen = [], set()
+    failures = streak = 0
+    provider_down = False
+
     for i in range(len(doc)):
         for img in doc[i].get_images(full=True):
             xref = img[0]
@@ -143,8 +154,19 @@ def _extract_figure_chunks(doc, source_name):
                 continue
             if pix.width < MIN_FIGURE_PX or pix.height < MIN_FIGURE_PX:
                 continue                   # decorative / junk
+            if provider_down:              # circuit open — don't keep hammering
+                failures += 1
+                continue
             path, b64 = _save_png(pix)
-            caption = _caption_image(b64)
+            try:
+                caption = _caption_image(b64)
+                streak = 0
+            except Exception:
+                failures += 1
+                streak += 1
+                if streak >= FIGURE_FAILURE_STREAK:
+                    provider_down = True
+                continue
             # None/empty caption (model returned no content) → skip, don't crash
             if not caption or caption.upper().startswith("SKIP"):
                 continue
@@ -158,10 +180,23 @@ def _extract_figure_chunks(doc, source_name):
                     "figure_image_path": media_relpath(path),
                 },
             })
+
+    if failures and warnings is not None:
+        warnings.append(
+            f"{failures} figure(s) couldn't be described (the vision model is busy) — "
+            "the text is fully searchable; re-upload later to add the figures."
+        )
     return chunks
 
 
-def build_pdf_chunks(src_path, source_name):
-    """PDF file → text chunks + figure-caption chunks ready for the store."""
+def build_pdf_chunks(src_path, source_name, warnings=None):
+    """PDF file → text chunks + figure-caption chunks ready for the store.
+
+    `warnings` (optional list) collects non-fatal problems worth surfacing to the
+    user, e.g. figures skipped because the vision model was unavailable.
+    """
     with fitz.open(src_path) as doc:
-        return _extract_text_chunks(doc, source_name) + _extract_figure_chunks(doc, source_name)
+        chunks = _extract_text_chunks(doc, source_name)
+        if ENABLE_FIGURE_CAPTIONS:
+            chunks += _extract_figure_chunks(doc, source_name, warnings)
+        return chunks
