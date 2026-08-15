@@ -9,11 +9,12 @@ __pycache__/
 # Virtual environment
 venv/
 
-# Vector store (rebuilt on ingest)
-chroma_store/
-
-# Ingested media (transcribed audio, extracted figures)
-media_store/
+# NOTE: chroma_store/ and media_store/ are intentionally COMMITTED.
+# They hold the prebuilt demo library (the sample course in test_dataset/), so a
+# first-time visitor lands on a working app and can ask a question immediately —
+# no upload, no API calls, no waiting. Streamlit Cloud's disk is ephemeral, so
+# anything a visitor adds is discarded on restart and this seed library returns.
+# Rebuild with:  python -m backend.evals.run_evals --ingest
 
 # Eval harness cache (regenerated on each run)
 backend/evals/.cache.json

@@ -59,7 +59,13 @@ CAPTION_PROMPT = (
 def _extract_text_chunks(doc, source_name):
     chunks = []
     for i in range(len(doc)):
-        text = doc[i].get_text().strip()
+        try:
+            # Per-page guard: real-world PDFs contain the occasional page that
+            # trips the extractor (odd encodings, damaged objects). Losing one
+            # page is acceptable; losing the document is not.
+            text = (doc[i].get_text() or "").strip()
+        except Exception:
+            continue
         if not text:
             continue
         for piece in _splitter.split_text(text):

@@ -292,6 +292,29 @@ if view == "🗺️ Course Map":
 
 
 # ── CHAT TRANSCRIPT ───────────────────────────────────────────────────────────
+# First-touch: the app ships with a demo course already indexed, so a visitor can
+# ask a real question immediately instead of waiting on an upload. Starter
+# questions make the capabilities obvious (timestamped audio, figure lookup,
+# honest refusal) without them having to guess what to try.
+if not st.session_state.messages:
+    st.markdown("#### Try it now — a sample course is already loaded")
+    st.caption(
+        "Two CS lectures and two slide decks. Ask one of these, or upload your own "
+        "material in the sidebar."
+    )
+    starters = [
+        ("What is the time complexity of Dijkstra's algorithm?", "audio + timestamp"),
+        ("Which sorting algorithm is slowest according to the chart?", "reads a figure"),
+        ("How are hash table collisions handled?", "cross-lecture"),
+        ("What is the capital of France?", "honest refusal"),
+    ]
+    cols = st.columns(2)
+    for i, (q, tag) in enumerate(starters):
+        if cols[i % 2].button(q, key=f"starter{i}", use_container_width=True):
+            st.session_state.pending = q
+            st.rerun()
+        cols[i % 2].caption(f"↳ {tag}")
+
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
@@ -302,7 +325,10 @@ for m in st.session_state.messages:
 
 
 # ── INPUT + RESPONSE ──────────────────────────────────────────────────────────
-if question := st.chat_input("Ask about your course…"):
+# A starter button sets `pending`, which is consumed here so it flows through the
+# exact same path as a typed question.
+question = st.session_state.pop("pending", None) or st.chat_input("Ask about your course…")
+if question:
     st.session_state.messages.append({"role": "user", "content": question})
     with st.chat_message("user"):
         st.markdown(question)
