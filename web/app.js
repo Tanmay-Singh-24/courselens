@@ -208,9 +208,19 @@ function inline(s, sources) {
     .replace(/[\[【]([^\[\]【】]{2,160})[\]】]/g, (m, inner) => citeChips(inner, sources) ?? m);
 }
 
+// gpt-oss sometimes writes inline LaTeX ("\(O(E \log V)\)"). We don't ship a math
+// renderer for one-liners like that; unwrap it into readable plain text.
+function plainMath(text) {
+  const sym = { log: "log", cdot: "·", times: "×", le: "≤", leq: "≤", ge: "≥", geq: "≥", to: "→", infty: "∞", approx: "≈", neq: "≠", ldots: "…", sqrt: "√" };
+  return text
+    .replace(/\\\(|\\\)|\\\[|\\\]/g, "")
+    .replace(/\\([a-zA-Z]+)/g, (m, w) => sym[w] ?? w)
+    .replace(/\{([^{}]*)\}/g, "$1");
+}
+
 function renderMarkdown(text, sources) {
   let html = "", list = null;
-  for (const raw of esc(text).split("\n")) {
+  for (const raw of esc(plainMath(text)).split("\n")) {
     const line = raw.trim();
     const li = line.match(/^(?:[-*•]|\d+[.)])\s+(.*)/);
     if (li) {

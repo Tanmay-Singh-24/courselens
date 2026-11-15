@@ -82,7 +82,7 @@ Two things are worth calling out honestly:
 - **Groq** (`openai/gpt-oss-120b`) — rewriting, generation, grading, eval judge
 - **Groq vision** (`qwen/qwen3.8-27b`) — figure captioning so images are searchable
 - **PyMuPDF** — PDF text + embedded-figure extraction
-- **ChromaDB** + **HuggingFace embeddings** (`all-MiniLM-L6-v2`) — vector store
+- **ChromaDB** + **fastembed** (`all-MiniLM-L6-v2` on ONNX Runtime, no PyTorch) — vector store
 - **imageio-ffmpeg** — bundled ffmpeg for audio conversion/splitting (no system install)
 - **yt-dlp** — YouTube audio extraction (local-only bonus)
 - **FastAPI** + **uvicorn** — JSON API (`api/main.py`) that also serves the frontend
@@ -170,7 +170,7 @@ message that tells the user what the library *does* cover.
 The deterministic core — transcript chunking, grader parsing/routing, citation
 filtering, eval scoring, concept-graph assembly, and the PDF figure pipeline
 (vision stubbed), plus the HTTP API (routing, the media path guard, error
-messages) — is covered by an **offline pytest suite** (74 tests, no API
+messages) — is covered by an **offline pytest suite** (75 tests, no API
 calls, runs in seconds):
 
 ```bash
@@ -192,22 +192,26 @@ Per-turn cost is bounded: the conversation history sent to the model is capped
 messages ≈ 5 Q&A turns), so long study sessions don't get slower and costlier
 with every question. The full conversation is still kept in the graph state.
 
-## Deploy (Hugging Face Spaces — the live demo)
+## Deploy (Render — the live demo)
 
-Free Docker hosting with enough RAM for the local embedding model.
+Free Docker hosting, no card. The image fits the 512 MB free tier because
+embeddings run on ONNX Runtime (fastembed) instead of PyTorch.
 
-```bash
-hf auth login                                        # a token with write access
-python scripts/deploy_hf.py <hf-username>/courselens
-```
+1. On [render.com](https://render.com): **New → Blueprint**, pick this repo.
+   [`render.yaml`](render.yaml) defines the service.
+2. Paste your `GROQ_API_KEY` when asked. It's stored in Render, not in git.
+3. Every push to `main` redeploys.
+4. **Keep it awake:** free services sleep after 15 idle minutes. A free uptime
+   monitor (e.g. UptimeRobot) requesting `https://<your-app>.onrender.com/api/health`
+   every 5 minutes keeps it always on; Render's 750 free hours a month cover a
+   full month of one service.
 
-Then in the Space: **Settings → Variables and secrets → New secret**,
-`GROQ_API_KEY`. The first build takes several minutes. Re-run the script to
-redeploy; it uploads the committed state of the repo, nothing uncommitted.
+Uploads live on the container's disk, so they reset on each redeploy; the demo
+library is built into the image and is always there.
 
 ## Deploy (Docker)
 
-Runs anywhere that runs containers (Render, Railway, Fly.io, Hugging Face Spaces).
+Runs anywhere that runs containers (Render, Railway, Fly.io, Cloud Run).
 The server listens on `$PORT` when the host sets it, else 8000.
 
 ```bash

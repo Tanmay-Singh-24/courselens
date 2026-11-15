@@ -205,4 +205,15 @@ def media(path: str):
     return FileResponse(full)
 
 
-app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
+class RevalidatingStatic(StaticFiles):
+    """Frontend files with Cache-Control: no-cache. Browsers otherwise reuse a
+    cached app.js after a redeploy, so visitors run old code against a new API.
+    no-cache still lets them keep the file; they just confirm it (a cheap 304)."""
+
+    def file_response(self, *args, **kwargs):
+        resp = super().file_response(*args, **kwargs)
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+
+app.mount("/", RevalidatingStatic(directory=WEB_DIR, html=True), name="web")

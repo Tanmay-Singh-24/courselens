@@ -9,28 +9,25 @@
 #     -v courselens-vectors:/app/chroma_store \
 #     -v courselens-media:/app/media_store courselens
 #
-# Hosts that assign the port themselves (Render, Railway, Fly, HF Spaces) set
+# Hosts that assign the port themselves (Render, Railway, Fly, Cloud Run) set
 # $PORT; the server listens on it, falling back to 8000.
 FROM python:3.12-slim
 
-# Run as a normal user (uid 1000): Hugging Face Spaces requires it, and it's the
+# Run as a normal user (uid 1000): most hosts expect it, and it's the
 # safer default anywhere. The model cache lives inside /app so that user owns it.
 RUN useradd -m -u 1000 user
-ENV HF_HOME=/app/.cache/huggingface
+ENV FASTEMBED_CACHE_PATH=/app/.cache/fastembed
 WORKDIR /app
 
 # Dependencies first — cached as their own layer, so source edits don't
-# re-install PyTorch.
+# re-install everything.
 COPY requirements.txt .
-# CPU-only PyTorch first: the default Linux wheel bundles ~2 GB of CUDA
-# libraries that a CPU host never uses. sentence-transformers then reuses it.
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
- && pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Bake the embedding model into the image so the first boot doesn't spend
 # minutes downloading it.
-RUN python -c "from langchain_huggingface import HuggingFaceEmbeddings; \
-    HuggingFaceEmbeddings(model_name='all-MiniLM-L6-v2')"
+RUN python -c "from fastembed import TextEmbedding; \
+    TextEmbedding('sentence-transformers/all-MiniLM-L6-v2')"
 
 COPY backend/ backend/
 COPY api/ api/

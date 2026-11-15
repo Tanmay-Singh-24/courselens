@@ -49,11 +49,21 @@ problem, works on phones, and lets the Course Map be a real interactive canvas.
 | **Medium** | Cross-source similarity links between 0.30 and 0.37 were noise (BubbleSort/Stacks). | Bridges need ≥ 0.38 (`BRIDGE_MIN`); kept: Priority queue/Queues 0.71, BSTs/Kruskal's 0.38. |
 | **Low** | Map clusters cut off after the legend wrapped; labels overlapped; the panel covered the selected node; cluster titles clipped on narrow screens; each click fetched passages twice. | Refit on resize until the user moves the camera; label-width-aware collision; camera insets for the panel/sheet; titles clamped to the canvas; re-selecting is a no-op. |
 
+### Hosting: off Streamlit, onto Render
+| Finding | Fix |
+|---|---|
+| Hugging Face Docker Spaces now need a PRO plan (402 on create). | Render's free Docker plan instead (`render.yaml`), kept awake by an uptime monitor on `/api/health`. |
+| Peak memory was ~540 MB, over Render's 512 MB free tier; nearly all of it was PyTorch, loaded only to run MiniLM. | Embeddings via fastembed (ONNX Runtime): same model, cosine 1.0 against the old vectors including stored chunks, so no re-index. Clean-install peak: **405 MB**, image ~2 GB smaller. Pillow pinned directly (it used to arrive via sentence-transformers). |
+| `langchain_core` silently imports `transformers` (and so PyTorch) whenever it is installed. | Removed from requirements; verified `torch` is never imported in a clean install. |
+| Browsers kept a cached `app.js` after a redeploy. | Static files are served with `Cache-Control: no-cache` (cheap 304 revalidation). |
+| gpt-oss sometimes answers with inline LaTeX (`\(O(E \log V)\)`). | Frontend unwraps it to plain text (`O(E log V)`). |
+| Image ran as root; most hosts expect a normal user. | Runs as uid 1000 with the model cache under `/app`. |
+
 ### Infra
 - Dockerfile now runs `uvicorn api.main:app` on `$PORT` (default 8000) and ships
   the demo library. Health check: `/api/health`.
 - `fastapi`, `uvicorn`, `python-multipart` pinned. CI and Jenkins lint/compile
-  `api/`. **74 offline tests** (was 40): API routing, the media path-traversal
+  `api/`. **75 offline tests** (was 40): API routing, the media path-traversal
   guard, error-to-message mapping, bridge classification, `relate_concepts`.
 
 ---

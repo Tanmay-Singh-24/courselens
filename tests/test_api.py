@@ -111,3 +111,7 @@ def test_course_map_marks_cross_source_links_as_bridges(client, monkeypatch):
 def test_course_map_empty_library(client, monkeypatch):
     monkeypatch.setattr(M, "has_documents", lambda: False)
     assert client.get("/api/course-map").json() == {"nodes": [], "links": [], "sources": []}
+
+
+def test_frontend_files_revalidate_after_redeploys(client):
+    assert client.get("/app.js").headers["cache-control"] == "no-cache"

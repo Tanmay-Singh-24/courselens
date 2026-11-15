@@ -1,0 +1,18 @@
+# Render Blueprint: one free Docker web service built from this repo.
+# Render → New → Blueprint → pick the repo. It asks for GROQ_API_KEY once
+# (sync: false keeps the value out of git) and redeploys on every push to main.
+# Free services sleep after 15 idle minutes; an uptime monitor hitting
+# /api/health every 5 minutes keeps it awake (750 free hours/month covers it).
+services:
+  - type: web
+    name: courselens
+    runtime: docker
+    plan: free
+    branch: main
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: ENABLE_YOUTUBE
+        value: "0"

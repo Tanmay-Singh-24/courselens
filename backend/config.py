@@ -37,7 +37,7 @@ load_dotenv(os.path.join(PROJECT_DIR, ".env"))
 WHISPER_MODEL = "whisper-large-v3"          # audio transcription
 TEXT_MODEL = "openai/gpt-oss-120b"         # rewrite, grade, generate
 VISION_MODEL = "qwen/qwen3.8-27b"           # figure captioning (image input)
-EMBED_MODEL_NAME = "all-MiniLM-L6-v2"       # local sentence embeddings
+EMBED_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"  # local, via fastembed (ONNX)
 
 # ── RETRIEVAL / CHUNKING ───────────────────────────────────────────────────
 COLLECTION_NAME = "courselens"

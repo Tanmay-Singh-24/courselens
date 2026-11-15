@@ -9,10 +9,9 @@ langgraph==1.2.2
 
 # Model + embeddings + vector store integrations
 langchain-groq==1.1.2
-langchain-huggingface==1.2.2
 langchain-chroma==1.1.0
 chromadb==1.5.9
-sentence-transformers==5.5.1
+fastembed==0.9.1         # all-MiniLM-L6-v2 on ONNX Runtime — no PyTorch
 
 # Audio transcription + media handling (pinned to installed + tested versions)
 groq==0.37.1              # raw SDK for Whisper transcription (verbose_json timestamps)
@@ -21,7 +20,7 @@ imageio-ffmpeg==0.6.0     # bundled ffmpeg binary — no system install required
 
 # PDF text + figure extraction (V2)
 pymupdf==1.28.0           # fitz: per-page text + embedded raster image extraction
-# Pillow arrives transitively (sentence-transformers); used to downscale figures.
+pillow==12.3.0            # downscale figures before captioning
 
 # Web app: FastAPI serves the JSON API and the static frontend in web/
 fastapi==0.139.0

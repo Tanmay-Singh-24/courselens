@@ -4,15 +4,40 @@ One shared Chroma collection holds chunks from every modality (audio, youtube,
 and — from V2 — pdf text/figures). Each chunk carries metadata that powers
 citations and actionable deep links; retrieval is naturally cross-modal.
 """
-from langchain_core.documents import Document
-from langchain_huggingface import HuggingFaceEmbeddings
+import os
+
+from fastembed import TextEmbedding
 from langchain_chroma import Chroma
+from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
 
 from backend.config import CHROMA_DIR, COLLECTION_NAME, EMBED_MODEL_NAME, TOP_K
 
+
+class FastEmbedEmbeddings(Embeddings):
+    """all-MiniLM-L6-v2 via fastembed (ONNX Runtime) instead of PyTorch.
+
+    Same model, same vectors: measured cosine similarity 1.0 against the
+    sentence-transformers output, including for chunks already in the store, so
+    no re-indexing was needed. Dropping PyTorch took peak memory from ~540 MB to
+    a size that fits a 512 MB free host, and shrank the Docker image by ~2 GB."""
+
+    def __init__(self, model_name):
+        # fastembed's default cache is the OS temp dir, which macOS clears on
+        # reboot (a 90 MB re-download). Keep it with the other model caches.
+        cache = os.environ.get("FASTEMBED_CACHE_PATH") or os.path.expanduser("~/.cache/fastembed")
+        self.model = TextEmbedding(model_name, cache_dir=cache)
+
+    def embed_documents(self, texts):
+        return [v.tolist() for v in self.model.embed(list(texts))]
+
+    def embed_query(self, text):
+        return self.embed_documents([text])[0]
+
+
 # Shared embedder — the same instance embeds stored chunks and the query, so both
 # live in one vector space.
-embeddings = HuggingFaceEmbeddings(model_name=EMBED_MODEL_NAME)
+embeddings = FastEmbedEmbeddings(EMBED_MODEL_NAME)
 
 # Persistent collection; created empty if missing (the library starts empty and
 # fills as the user ingests material).
