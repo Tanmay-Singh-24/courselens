@@ -245,6 +245,12 @@ body.has-player .view { padding-bottom: 66px; }
 @keyframes rise { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes grain { 0% { transform: translate(0, 0); } 20% { transform: translate(-22px, 14px); } 40% { transform: translate(18px, -26px); } 60% { transform: translate(-12px, 30px); } 80% { transform: translate(28px, 8px); } 100% { transform: translate(0, 0); } }
 
+/* Mid-width screens: the key and the stats line can't share one row, so the
+   stats line sits just above the key. */
+@media (min-width: 901px) and (max-width: 1240px) {
+  .map-hint { right: auto; left: 18px; bottom: 60px; }
+}
+
 /* ── responsive ──────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .only-mobile { display: inline-flex; }
