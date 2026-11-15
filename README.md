@@ -192,6 +192,19 @@ Per-turn cost is bounded: the conversation history sent to the model is capped
 messages ≈ 5 Q&A turns), so long study sessions don't get slower and costlier
 with every question. The full conversation is still kept in the graph state.
 
+## Deploy (Hugging Face Spaces — the live demo)
+
+Free Docker hosting with enough RAM for the local embedding model.
+
+```bash
+hf auth login                                        # a token with write access
+python scripts/deploy_hf.py <hf-username>/courselens
+```
+
+Then in the Space: **Settings → Variables and secrets → New secret**,
+`GROQ_API_KEY`. The first build takes several minutes. Re-run the script to
+redeploy; it uploads the committed state of the repo, nothing uncommitted.
+
 ## Deploy (Docker)
 
 Runs anywhere that runs containers (Render, Railway, Fly.io, Hugging Face Spaces).

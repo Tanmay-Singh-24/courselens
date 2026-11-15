@@ -13,12 +13,19 @@
 # $PORT; the server listens on it, falling back to 8000.
 FROM python:3.12-slim
 
+# Run as a normal user (uid 1000): Hugging Face Spaces requires it, and it's the
+# safer default anywhere. The model cache lives inside /app so that user owns it.
+RUN useradd -m -u 1000 user
+ENV HF_HOME=/app/.cache/huggingface
 WORKDIR /app
 
 # Dependencies first — cached as their own layer, so source edits don't
 # re-install PyTorch.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# CPU-only PyTorch first: the default Linux wheel bundles ~2 GB of CUDA
+# libraries that a CPU host never uses. sentence-transformers then reuses it.
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+ && pip install --no-cache-dir -r requirements.txt
 
 # Bake the embedding model into the image so the first boot doesn't spend
 # minutes downloading it.
@@ -32,6 +39,8 @@ COPY web/ web/
 # cached concept list) so a new deploy opens with something to ask about.
 COPY chroma_store/ chroma_store/
 COPY media_store/ media_store/
+RUN chown -R user:user /app
+USER user
 
 # yt-dlp is blocked from datacenter IPs — hide YouTube ingestion in containers
 # by default (override with -e ENABLE_YOUTUBE=1 when running from a home IP).
