@@ -2,9 +2,8 @@
 .env
 .streamlit/secrets.toml
 
-# Local state (rebuilt on ingest / mounted as volumes)
-chroma_store/
-media_store/
+# Local state. chroma_store/ and media_store/ are NOT ignored: they hold the
+# demo library, which the image ships with (see Dockerfile).
 query_log.csv
 backend/evals/.cache.json
 

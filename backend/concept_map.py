@@ -103,6 +103,35 @@ def assemble_graph(per_source, max_concepts=MAX_CONCEPTS):
     return nodes, edges, cmap
 
 
+def relate_concepts(labels, vectors, k=3, floor=0.3):
+    """Pure: link each concept to its k most similar concepts by cosine similarity.
+
+    Co-occurrence edges only say "these came from the same lecture". Similarity
+    edges say "these mean related things", which also connects concepts ACROSS
+    sources (e.g. "Priority queue" in one lecture and "Queues" in another).
+    Returns [(a, b, similarity)], undirected and de-duplicated, strongest first.
+    Links weaker than `floor` are dropped so unrelated concepts stay unlinked."""
+    def unit(v):
+        norm = sum(x * x for x in v) ** 0.5 or 1.0
+        return [x / norm for x in v]
+
+    vecs = [unit(v) for v in vectors]
+    best = {}
+    for i, a in enumerate(labels):
+        sims = sorted(
+            ((sum(x * y for x, y in zip(vecs[i], vecs[j])), b)
+             for j, b in enumerate(labels) if j != i),
+            reverse=True,
+        )
+        for sim, b in sims[:k]:
+            if sim < floor:
+                break
+            pair = tuple(sorted((a, b)))
+            best[pair] = max(best.get(pair, 0.0), sim)
+    return sorted(((a, b, round(s, 3)) for (a, b), s in best.items()),
+                  key=lambda t: (-t[2], t[0], t[1]))
+
+
 def build_concept_map(max_concepts=MAX_CONCEPTS):
     """Extract concepts per source (cached) and assemble the graph.
     Returns (nodes, edges, concept_sources)."""

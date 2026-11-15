@@ -8,6 +8,56 @@ Newest version on top.
 
 ---
 
+## V7 — Web frontend (FastAPI + vanilla JS) and a rebuilt Course Map  ·  2026-11-15  ·  ✅
+
+Replaced the Streamlit UI with a small web app: `api/main.py` (FastAPI) wraps the
+unchanged `backend/` pipeline as JSON endpoints and serves a static frontend from
+`web/` (plain HTML/CSS/JS, no build step). Streamlit reruns the whole script on
+every click and keeps stale modules after a redeploy; the web app has neither
+problem, works on phones, and lets the Course Map be a real interactive canvas.
+
+### What's new
+- **Ask view:** inline citation chips, source cards (play audio from the cited
+  second, open the cited figure, deep-link YouTube), one shared audio player, and
+  an expandable trace (grader verdicts, latency, tokens).
+- **Course Map, rebuilt:** custom force-directed canvas. Concepts cluster around
+  their source; concepts shared by two sources sit between the clusters and are
+  drawn as split-colour nodes. Three link kinds: same source, related idea
+  (embedding similarity, local model, no API tokens) and **bridge** (a related
+  idea in a *different* source, drawn boldest). Search flies to a concept; the
+  side panel (bottom sheet on phones) shows related ideas, the passages where the
+  concept comes up (playable), and "Ask CourseLens about X".
+- **Responsive:** library becomes a drawer, panel becomes a bottom sheet, source
+  chips scroll sideways.
+- **Look (V7.1):** near-black + electric blue + warm cream, a serif (Gloock) for
+  headlines and a pixel face (Pixelify Sans) for labels. Textures: film grain, a
+  still corner glow over a pixel-dot grid that bends around the cursor
+  (`web/field.js`; an earlier animated light-ray shader was dropped as too busy), cursor
+  spotlights on cards, and a glowing send orb.
+- **Map restyled as constellations:** each source is a glowing hub with its
+  concepts on thin teal spokes (same-source co-occurrence edges are no longer
+  drawn: the spokes already say it, and drawing both made hairballs). Bridges
+  carry travelling light pulses; hover sends pulses out along a node's links;
+  selection ripples; concept labels fade in with zoom; the background dot grid
+  parallaxes and bends away from the cursor. Clicking a hub opens a source panel.
+
+### Findings & fixes
+| Severity | Finding | Fix |
+|---|---|---|
+| **High** | Every question failed with `groq.NotFoundError: model_not_found`. Groq retired `llama-3.3-70b-versatile` and `qwen3.6-27b`. This also broke the live Streamlit deploy. | Switched to `openai/gpt-oss-120b` (text) and `qwen/qwen3.8-27b` (vision), re-verified against the models API: clean JSON from the grader, `reasoning_effort="none"` still honoured for captions. |
+| **Medium** | gpt-oss cites with `【…】` brackets, not `[…]`, so citations rendered as raw text. | Citation parser accepts both. |
+| **Medium** | Cross-source similarity links between 0.30 and 0.37 were noise (BubbleSort/Stacks). | Bridges need ≥ 0.38 (`BRIDGE_MIN`); kept: Priority queue/Queues 0.71, BSTs/Kruskal's 0.38. |
+| **Low** | Map clusters cut off after the legend wrapped; labels overlapped; the panel covered the selected node; cluster titles clipped on narrow screens; each click fetched passages twice. | Refit on resize until the user moves the camera; label-width-aware collision; camera insets for the panel/sheet; titles clamped to the canvas; re-selecting is a no-op. |
+
+### Infra
+- Dockerfile now runs `uvicorn api.main:app` on `$PORT` (default 8000) and ships
+  the demo library. Health check: `/api/health`.
+- `fastapi`, `uvicorn`, `python-multipart` pinned. CI and Jenkins lint/compile
+  `api/`. **74 offline tests** (was 40): API routing, the media path-traversal
+  guard, error-to-message mapping, bridge classification, `relate_concepts`.
+
+---
+
 ## V6.2 — Production debugging: real-data testing & honest numbers  ·  2026-07-06  ·  ✅
 
 Debugging pass driven by real-world data (a 15-minute real YouTube lecture + an

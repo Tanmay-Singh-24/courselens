@@ -31,10 +31,10 @@ jobs:
           pip install --quiet -r requirements.txt pytest ruff
 
       - name: Lint (ruff)
-        run: ruff check backend frontend tests
+        run: ruff check backend frontend api tests
 
       - name: Compile check
-        run: python -m py_compile backend/*.py backend/ingest/*.py backend/evals/run_evals.py frontend/app.py
+        run: python -m py_compile backend/*.py backend/ingest/*.py backend/evals/run_evals.py frontend/app.py api/main.py
 
       - name: Tests (offline — no API calls)
         run: pytest -q

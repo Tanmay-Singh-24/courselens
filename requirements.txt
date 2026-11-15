@@ -23,7 +23,12 @@ imageio-ffmpeg==0.6.0     # bundled ffmpeg binary — no system install required
 pymupdf==1.28.0           # fitz: per-page text + embedded raster image extraction
 # Pillow arrives transitively (sentence-transformers); used to downscale figures.
 
-# UI + config
+# Web app: FastAPI serves the JSON API and the static frontend in web/
+fastapi==0.139.0
+uvicorn==0.49.0
+python-multipart==0.0.32  # file uploads (/api/ingest)
+
+# Legacy Streamlit UI (frontend/app.py) + config
 streamlit==1.58.0
 streamlit-agraph==0.0.45   # V6 Course Map concept graph
 python-dotenv==1.2.2

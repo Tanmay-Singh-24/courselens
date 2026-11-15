@@ -15,13 +15,14 @@ RAG backbone expanded to cross modalities and to cite its sources by timestamp.
 - 🔗 **Actionable citations** — click to seek audio/video to the exact second, or view the cited figure inline
 - 🧠 **Corrective-RAG grader** — grades retrieval relevance, retries with a reformulated query, and refuses deterministically instead of trusting the generator's judgment
 - 📊 **Measured, not vibes** — an eval harness with retrieval hit-rate, groundedness, and a grader ablation
-- 🗺️ **Course Map** — an interactive concept graph over your whole course
+- 🗺️ **Course Map** — an interactive concept graph over your whole course, with bridges where two lectures meet
 - ⚙️ **Instrumented** — per-query latency + token usage
 
-> **Status: V6 (feature-complete)** — audio + PDF (text & figures) ingestion, a
+> **Status: V7** — audio + PDF (text & figures) ingestion, a
 > **corrective-RAG grader** (retry-then-refuse), an **eval harness** (hit-rate,
 > groundedness, grader ablation), **per-query instrumentation** (latency + tokens),
-> deploy-ready, and a **Course Map** — an interactive concept graph over your library. See
+> a **Course Map** concept graph, and a responsive **web frontend** (FastAPI + plain
+> JS) that replaced the original Streamlit UI. See
 > [`BUILD_PLAN.md`](BUILD_PLAN.md) for the roadmap, [`DEVLOG.md`](DEVLOG.md) for the
 > build history, and [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md) for a plain-language
 > explanation.
@@ -78,13 +79,15 @@ Two things are worth calling out honestly:
 
 - **LangGraph** — orchestrates rewrite → retrieve → generate as a stateful graph
 - **Groq Whisper** (`whisper-large-v3`) — audio transcription with timestamps
-- **Groq** (`llama-3.3-70b-versatile`) — rewriting, generation, grading, eval judge
-- **Groq vision** (`qwen/qwen3.6-27b`) — figure captioning so images are searchable
+- **Groq** (`openai/gpt-oss-120b`) — rewriting, generation, grading, eval judge
+- **Groq vision** (`qwen/qwen3.8-27b`) — figure captioning so images are searchable
 - **PyMuPDF** — PDF text + embedded-figure extraction
 - **ChromaDB** + **HuggingFace embeddings** (`all-MiniLM-L6-v2`) — vector store
 - **imageio-ffmpeg** — bundled ffmpeg for audio conversion/splitting (no system install)
 - **yt-dlp** — YouTube audio extraction (local-only bonus)
-- **Streamlit** + **streamlit-agraph** — chat UI with actionable citations, and the Course Map concept graph
+- **FastAPI** + **uvicorn** — JSON API (`api/main.py`) that also serves the frontend
+- **Plain HTML/CSS/JS** (`web/`, no build step) — chat UI and a custom canvas Course Map
+- *(legacy)* **Streamlit** — the original UI, still runnable via `streamlit run frontend/app.py`
 
 ## Setup & run
 
@@ -96,18 +99,27 @@ source venv/bin/activate            # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 cp .env.example .env                # then edit .env and set GROQ_API_KEY
-streamlit run frontend/app.py
+uvicorn api.main:app --port 8000
 ```
 
-Add a lecture (audio file or, locally, a YouTube URL) in the sidebar, wait for it
-to transcribe, then ask questions. Answers cite their sources; expand **Sources**
-to play the audio from the exact cited moment.
+Open http://localhost:8000. The repo ships a small demo library (three lectures,
+two slide decks), so you can ask straight away. Add your own lecture (audio file,
+PDF or, locally, a YouTube URL) in the sidebar. Answers cite their sources inline;
+click a source card to play the audio from the exact cited moment or open the
+cited figure.
+
+**Course Map** tab: concepts cluster around the lecture or deck they come from.
+Concepts taught in two sources sit between the clusters as split-colour nodes, and
+bold purple **bridges** link related ideas across different sources. Click a concept
+for related ideas, the passages where it comes up (playable), and a one-click
+"Ask CourseLens about it".
 
 The sidebar **Library** reads from the vector store, so it shows everything
-you've ingested — including after a page refresh or in a later session. A file
-that fails to ingest (e.g. a rate limit mid-transcription) is set aside with a
-**Retry failed files** button instead of being silently re-attempted on every
-interaction.
+you've ingested, including after a page refresh or in a later session.
+
+**API:** `GET /api/health`, `GET /api/library`, `POST /api/ask`, `POST /api/ingest`,
+`POST /api/ingest/youtube`, `GET /api/course-map`, `GET /api/concept?name=`.
+Interactive docs at `/docs`.
 
 > ffmpeg is bundled via `imageio-ffmpeg`, so no separate install is needed. A
 > 60–90 minute lecture is transcoded to FLAC and split automatically before
@@ -157,7 +169,8 @@ message that tells the user what the library *does* cover.
 
 The deterministic core — transcript chunking, grader parsing/routing, citation
 filtering, eval scoring, concept-graph assembly, and the PDF figure pipeline
-(vision stubbed) — is covered by an **offline pytest suite** (40 tests, no API
+(vision stubbed), plus the HTTP API (routing, the media path guard, error
+messages) — is covered by an **offline pytest suite** (74 tests, no API
 calls, runs in seconds):
 
 ```bash
@@ -179,40 +192,23 @@ Per-turn cost is bounded: the conversation history sent to the model is capped
 messages ≈ 5 Q&A turns), so long study sessions don't get slower and costlier
 with every question. The full conversation is still kept in the graph state.
 
-## Deploy (Streamlit Community Cloud)
-
-Runs on the free tier. The disk is **ephemeral** — `chroma_store/` and `media_store/`
-reset on every restart, so users start with an empty library and re-ingest (fine for
-a demo; worth noting to reviewers).
-
-1. Push to GitHub.
-2. Go to **[share.streamlit.io](https://share.streamlit.io)** → **Create app** → deploy from your repo.
-3. **Main file path:** `frontend/app.py`.
-4. **Advanced settings → Secrets** — paste:
-   ```toml
-   GROQ_API_KEY = "gsk_your_key_here"
-   ENABLE_YOUTUBE = "0"   # yt-dlp is blocked from cloud IPs — hide the feature
-   ```
-5. Deploy. First build is slow — it installs PyTorch (via sentence-transformers), so allow several minutes.
-
-ffmpeg is bundled through `imageio-ffmpeg`, so no `packages.txt` is needed. The
-`test_dataset/` folder has a small lecture + slide deck to try immediately.
-
 ## Deploy (Docker)
 
-For anywhere that runs containers:
+Runs anywhere that runs containers (Render, Railway, Fly.io, Hugging Face Spaces).
+The server listens on `$PORT` when the host sets it, else 8000.
 
 ```bash
 docker build -t courselens .
-docker run -p 8501:8501 -e GROQ_API_KEY=gsk_your_key \
+docker run -p 8000:8000 -e GROQ_API_KEY=gsk_your_key \
   -v courselens-vectors:/app/chroma_store \
   -v courselens-media:/app/media_store courselens
 ```
 
-The embedding model is baked into the image (no slow first boot), the volumes
-persist your library across restarts, and a `HEALTHCHECK` watches Streamlit's
-health endpoint. YouTube ingestion is off by default in containers (datacenter
-IPs are blocked by YouTube); re-enable from a home IP with `-e ENABLE_YOUTUBE=1`.
+The image ships the embedding model (no slow first boot) and the demo library. The
+volumes persist uploads across restarts; without them the disk resets to the demo
+library on every restart. A `HEALTHCHECK` polls `/api/health`. YouTube ingestion is
+off by default in containers (datacenter IPs are blocked by YouTube); re-enable from
+a home IP with `-e ENABLE_YOUTUBE=1`. ffmpeg is bundled through `imageio-ffmpeg`.
 
 ## Roadmap
 
@@ -224,12 +220,13 @@ IPs are blocked by YouTube); re-enable from a home IP with `-e ENABLE_YOUTUBE=1`
 | **V4** ✅ | Eval harness — hit-rate, groundedness, grader ablation |
 | **V5** ✅ | Per-query instrumentation (latency + tokens) + deploy-ready |
 | **V6** ✅ | Course Map — interactive concept graph over the library |
+| **V7** ✅ | Web frontend (FastAPI + plain JS), rebuilt Course Map with cross-source bridges |
 
 ### Planned / future work
 
 - **Per-session library isolation** — today all uploads share one Chroma collection;
   scope collections by session id so users don't see each other's material.
-- **Persistent storage** — Streamlit Cloud's disk is ephemeral; back the vector store
+- **Persistent storage** — free container hosts have ephemeral disks; back the vector store
   with a hosted store (Chroma Cloud / Qdrant) so libraries survive restarts.
 - **Streaming answers** — token-by-token generation for snappier responses.
 - **Video ingestion** — sample on-screen slide frames, not just the audio track.

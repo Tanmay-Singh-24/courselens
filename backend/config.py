@@ -3,10 +3,10 @@
 All tunables (model IDs, chunk sizes, paths, limits) live here so the rest of the
 codebase imports from one place.
 
-Groq model IDs verified against https://console.groq.com/docs/models and
-/docs/vision on 2026-07-04. Re-verify before relying on them — Groq renames and
-retires models (e.g. llama-4-scout, our original vision pick, was deprecated
-2026-06-17; we now use qwen/qwen3.6-27b for image input).
+Groq model IDs verified against the live models API on 2026-11-15. Re-verify
+before relying on them: Groq retires models without warning. History so far:
+llama-4-scout (vision) retired 2026-06; llama-3.3-70b-versatile (text) and
+qwen3.6-27b (vision) retired by 2026-11, replaced by gpt-oss-120b and qwen3.8-27b.
 """
 import os
 
@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 # so a redeploy can leave fresh UI code calling a stale backend. Surfacing this
 # in the UI makes "is the new code actually live?" answerable at a glance instead
 # of inferred from symptoms.
-BUILD = "v6.3-resilient-ingest"
+BUILD = "v7.0-web"
 
 # ── PATHS ──────────────────────────────────────────────────────────────────
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -35,8 +35,8 @@ load_dotenv(os.path.join(PROJECT_DIR, ".env"))
 
 # ── MODELS ─────────────────────────────────────────────────────────────────
 WHISPER_MODEL = "whisper-large-v3"          # audio transcription
-TEXT_MODEL = "llama-3.3-70b-versatile"      # rewrite + generate
-VISION_MODEL = "qwen/qwen3.6-27b"           # figure captioning (image input)
+TEXT_MODEL = "openai/gpt-oss-120b"         # rewrite, grade, generate
+VISION_MODEL = "qwen/qwen3.8-27b"           # figure captioning (image input)
 EMBED_MODEL_NAME = "all-MiniLM-L6-v2"       # local sentence embeddings
 
 # ── RETRIEVAL / CHUNKING ───────────────────────────────────────────────────
@@ -87,7 +87,7 @@ FIGURE_CAPTION_ATTEMPTS = 3
 # figures we describe per document: the text is always fully indexed, and the
 # first handful of figures carries most of the value.
 MAX_FIGURES_PER_DOC = 6
-# qwen3.6 is a reasoning model: left alone it spends ~350 tokens thinking before
+# The qwen vision models reason by default: left alone it spends ~350 tokens thinking before
 # a ~40-token caption, and we throw the reasoning away. Disabling it cuts tokens
 # ~9x (measured) — real savings against a 100k/day free-tier budget.
 VISION_REASONING_EFFORT = "none"

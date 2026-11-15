@@ -29,10 +29,10 @@ pipeline {
             }
         }
         stage('Lint') {
-            steps { sh '. .venv/bin/activate && ruff check backend frontend tests' }
+            steps { sh '. .venv/bin/activate && ruff check backend frontend api tests' }
         }
         stage('Compile') {
-            steps { sh '. .venv/bin/activate && python -m py_compile backend/*.py backend/ingest/*.py backend/evals/run_evals.py frontend/app.py' }
+            steps { sh '. .venv/bin/activate && python -m py_compile backend/*.py backend/ingest/*.py backend/evals/run_evals.py frontend/app.py api/main.py' }
         }
         stage('Test') {
             steps { sh '. .venv/bin/activate && pytest -q' }

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>CourseLens</title>
+  <meta name="description" content="Ask questions across your lectures and slides. Every answer cites the exact second or figure." />
+  <meta name="theme-color" content="#050508" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='6' fill='%23050508'/><circle cx='12' cy='12' r='7.6' fill='none' stroke='%23ece8d8' stroke-width='1.8'/><circle cx='12' cy='12' r='4.2' fill='%232d4bff'/><rect x='9.6' y='9.6' width='2' height='2' fill='%23ece8d8'/></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Gloock&family=Pixelify+Sans:wght@400;500;600&display=swap" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-btn only-mobile" id="libraryToggle" aria-label="Open library">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+    </button>
+    <a class="brand" href="#" aria-label="CourseLens home">
+      <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <circle cx="12" cy="12" r="5" fill="#2d4bff"/>
+        <rect x="9.2" y="9.2" width="2.2" height="2.2" fill="currentColor"/>
+      </svg><span class="wordmark">Course<span>Lens</span></span>
+    </a>
+    <nav class="tabs" role="tablist">
+      <button role="tab" class="tab active" data-view="ask" aria-selected="true">ask</button>
+      <button role="tab" class="tab" data-view="map" aria-selected="false">course map</button>
+    </nav>
+    <span class="status" id="status" title="Server status"><span class="dot"></span><span class="status-text">connecting</span></span>
+  </header>
+
+  <div class="layout">
+    <!-- ── Library ─────────────────────────────────────────────── -->
+    <aside class="library" id="library" aria-label="Your course library">
+      <div class="library-head">
+        <h2>your course</h2>
+        <button class="icon-btn only-mobile" id="libraryClose" aria-label="Close library">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" multiple accept=".mp3,.m4a,.wav,.flac,.aac,.ogg,.opus,.mp4,.pdf" hidden />
+        <span class="dz-plus" aria-hidden="true">+</span>
+        <span><strong>add lectures or slides</strong><small>Audio or PDF. Drop here or click.</small></span>
+      </label>
+
+      <form class="yt-form" id="ytForm" hidden>
+        <input type="url" id="ytUrl" placeholder="Paste a YouTube lecture URL" required />
+        <button type="submit" class="btn-small">add</button>
+      </form>
+
+      <ul class="uploads" id="uploads" aria-live="polite"></ul>
+
+      <h3 class="section-label">library</h3>
+      <ul class="sources" id="sources"><li class="muted">Loading…</li></ul>
+
+      <p class="build" id="build"></p>
+    </aside>
+    <div class="scrim" id="scrim" hidden></div>
+
+    <!-- ── Ask ─────────────────────────────────────────────────── -->
+    <main class="view view-ask active" id="view-ask">
+      <canvas class="field" id="field" aria-hidden="true"></canvas>
+      <div class="thread" id="thread">
+        <section class="welcome" id="welcome">
+          <p class="kicker">lectures · slides · figures</p>
+          <h1>Ask your course <span class="px">anything.</span></h1>
+          <p class="lede">Answers come only from your lectures and slides, and every claim links back to the exact second in the audio or the figure on the slide.</p>
+          <div class="starters" id="starters"></div>
+        </section>
+      </div>
+      <form class="composer" id="composer">
+        <textarea id="question" rows="1" placeholder="Ask about your course…" aria-label="Your question"></textarea>
+        <button type="submit" class="send orb" id="send" aria-label="Send">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </form>
+    </main>
+
+    <!-- ── Course Map ──────────────────────────────────────────── -->
+    <main class="view view-map" id="view-map">
+      <div class="map-toolbar">
+        <div class="map-search">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M16 16l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <input id="mapSearch" type="search" placeholder="Find a concept" autocomplete="off" list="conceptList" />
+          <datalist id="conceptList"></datalist>
+        </div>
+        <div class="legend" id="legend"></div>
+        <button class="btn-ghost" id="mapReset" title="Fit to screen">fit</button>
+      </div>
+
+      <div class="map-stage">
+        <canvas id="mapCanvas" aria-label="Concept graph of your course"></canvas>
+        <div class="map-overlay" id="mapOverlay">
+          <div class="spinner"></div><p>Building your course map…</p>
+        </div>
+        <div class="map-key" id="mapKey">
+          <span><i class="k-hub"></i>source</span>
+          <span><i class="k-spoke"></i>taught in</span>
+          <span><i class="k-related"></i>related idea</span>
+          <span><i class="k-bridge"></i>bridge across sources</span>
+        </div>
+        <p class="map-hint" id="mapHint">drag to pan · scroll or pinch to zoom · click a dot</p>
+        <aside class="concept-panel" id="conceptPanel" aria-live="polite" hidden>
+          <button class="icon-btn panel-close" id="panelClose" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <div id="panelBody"></div>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <!-- ── Audio player (shared by every citation) ──────────────────── -->
+  <div class="player" id="player" hidden>
+    <div class="player-meta"><span class="player-icon" aria-hidden="true"></span><span id="playerLabel"></span></div>
+    <audio id="audio" controls preload="none"></audio>
+    <button class="icon-btn" id="playerClose" aria-label="Close player">
+      <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+  <div class="lightbox" id="lightbox" hidden>
+    <figure><img id="lightboxImg" alt="" /><figcaption id="lightboxCap"></figcaption></figure>
+  </div>
+
+  <div class="grain" aria-hidden="true"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
